@@ -18,6 +18,7 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 let mainWindow = null;
 let siteView = null;
 let headerInset = HEADER_HEIGHT;
+let siteRetried = false;
 
 function layoutSiteView() {
   if (!siteView || !mainWindow) return;
@@ -76,8 +77,22 @@ function sendSiteState() {
   });
 }
 
+function loadSiteUrl(url) {
+  siteRetried = false;
+  return siteView.webContents.loadURL(url).catch(function () { /* surfaced by the page itself */ });
+}
+
 function openSite(url) {
-  closeSiteView();
+  // Reuse the live view. Replacing it would throw away its navigation history,
+  // so clicking another site or a link would always start a new window/stack.
+  // Keeping one view means Back returns through the pages the user just visited.
+  if (siteView) {
+    headerInset = HEADER_HEIGHT;
+    layoutSiteView();
+    loadSiteUrl(url);
+    sendSiteState();
+    return;
+  }
 
   siteView = new WebContentsView({
     webPreferences: {
@@ -93,21 +108,21 @@ function openSite(url) {
   headerInset = HEADER_HEIGHT;
   layoutSiteView();
 
-  var retried = false;
-  siteView.webContents.loadURL(url).catch(function () { /* surfaced by the page itself */ });
-
   // A transient failure (network hiccup, DNS) gets one silent retry instead of
   // showing the user an error screen.
   siteView.webContents.on("did-fail-load", function (_event, errorCode, _desc, failedUrl, isMainFrame) {
-    if (!isMainFrame || errorCode === -3 || retried) return;
-    retried = true;
+    if (!isMainFrame || errorCode === -3 || siteRetried) return;
+    siteRetried = true;
     setTimeout(function () {
       if (siteView && failedUrl) siteView.webContents.loadURL(failedUrl).catch(function () {});
     }, 900);
   });
 
   siteView.webContents.setWindowOpenHandler(function (details) {
-    shell.openExternal(details.url);
+    // A pop-up is part of the site the user is already browsing. Load it in
+    // this view so Back takes them to the page they came from, and never hand
+    // it to the system browser as a separate window.
+    if (/^https?:\/\//i.test(details.url)) loadSiteUrl(details.url);
     return { action: "deny" };
   });
 
@@ -122,6 +137,8 @@ function openSite(url) {
   ["did-navigate", "did-navigate-in-page", "did-start-loading", "did-stop-loading"].forEach(function (name) {
     siteView.webContents.on(name, sendSiteState);
   });
+
+  loadSiteUrl(url);
   sendSiteState();
 }
 

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
@@ -37,6 +38,11 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         // Local assets, but the tiles load favicons over the network.
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // A TV remote scrolls by moving focus, so the page itself never shows
+        // scrollbars or a stretching overscroll glow.
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setBackgroundColor(0xFF000000);
         web.setWebViewClient(new WebViewClient());
         web.addJavascriptInterface(new Shell(), "AndroidShell");

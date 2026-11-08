@@ -21,6 +21,7 @@ The Windows file name carries the version, the platform and the architecture, so
 - **Square poster tiles** — each site's icon artwork fills the whole tile, with the site name laid over the bottom of it
 - **Any site by URL** — add Netflix, Hulu, YouTube, Twitch, iPlayer, a self-hosted server, anything
 - **Real in-app viewer** — sites open in a proper browser view, not a restricted iframe, with back, forward, reload and exit controls
+- **One view, real history** — links and pop-ups inside a site stay in that same view instead of opening a new window, so **Back** returns through the pages you just visited
 - **Persistent sign-ins** — cookies are kept in an app profile, so you stay logged in between sessions
 - **Your library stays put** — tiles, names, categories and custom icons are saved on the device
 - **Three layouts** — Grid (poster tiles), Bold (larger posters) and Minimal (a compact list)
@@ -44,9 +45,9 @@ The Windows file name carries the version, the platform and the architecture, so
 
 1. Copy `anystreamsitev1.1-phone.apk` to the device, or download it directly in the browser.
 2. Open the file and allow installs from unknown sources when Android asks.
-3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build.
+3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build. If Android blocks the install, tap **More details**, then **Install anyway**; the manifest targets Android 14, so the "made for an older version" warning no longer applies.
 4. Open the app, paste a site URL and add it. Two tiles sit per row on a normal handset.
-5. Tap a tile to open the site full screen. The back button returns to your library.
+5. Tap a tile to open the site full screen. Links stay in that view, and the back button walks your history before returning to the library.
 
 ## Android TV
 
@@ -60,7 +61,7 @@ The Windows file name carries the version, the platform and the architecture, so
 3. Move around with the D-pad: left, right, up and down jump between tiles, and **OK** opens the highlighted site.
 4. Inside a site, **Back** closes it and returns to the library.
 
-The TV build uses larger tiles and focus outlines so it is readable from across the room.
+The TV build uses a compact 10-foot layout that scales from 720p through 4K, with larger tiles, focus outlines and no heavy blur effects, so it stays readable and smooth on low-power boxes. Links inside a site stay in the same view, and **Back** walks the site's history before returning to the library.
 
 ## Adding and managing sites
 
@@ -125,4 +126,4 @@ APKs are written to `dist/android/` and signed with the keystore referenced by t
 
 ## Version
 
-Current release: **v1.1** — Windows x64, Android phone and Android TV.
+Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, and gives Android TV a native 10-foot layout.
