@@ -700,6 +700,11 @@ try {
   .switch input:checked + span::after { transform: translateX(20px); }
   .switch input:focus-visible + span { outline: 2px solid var(--accent-2); outline-offset: 2px; }
   .settings-action { margin-top: 10px; }
+  .settings-row + .settings-row { margin-top: 16px; }
+  .row-note { margin: 3px 0 0; font-size: 11px; line-height: 1.45; color: #6f6f6f; }
+  html[data-mode="light"] .row-note { color: #8a8a8a; }
+  .btn.armed { border-color: var(--accent); color: #fff; }
+  .btn[disabled] { opacity: 0.55; cursor: default; }
 
   /* ---------- launch transition ---------- */
   .launch {
@@ -1161,6 +1166,24 @@ try {
       </div>
     </section>
 
+    <section class="settings-section">
+      <h3>Storage</h3>
+      <div class="settings-row">
+        <div>
+          <p>Cached pages</p>
+          <p class="row-note">Speeds up sites you have opened before. Clearing it keeps you signed in.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="clearCacheBtn">Clear cache</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <p>Cookies &amp; sign-ins</p>
+          <p class="row-note">Cookies are how sites keep you signed in between visits. Clearing them signs you out everywhere.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="clearCookiesBtn">Clear cookies</button>
+      </div>
+    </section>
+
     <div class="panel-actions">
       <button class="btn btn-primary" type="button" id="settingsDone">Done</button>
     </div>
@@ -1468,6 +1491,75 @@ try {
     var added = addPopular();
     toast(added ? added + " popular sites added" : "All popular sites are already in your library");
   });
+
+  /* ---------------- storage ---------------- */
+
+  var clearCacheBtn = document.getElementById("clearCacheBtn");
+  var clearCookiesBtn = document.getElementById("clearCookiesBtn");
+  var cookiesArmed = false;
+  var cookiesArmTimer = null;
+
+  function runStorageAction(btn, options) {
+    if (btn.disabled) return;
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = options.busy;
+    Promise.resolve()
+      .then(options.run)
+      .then(function (result) {
+        toast(result && result.ok ? options.success : options.failure);
+      })
+      .catch(function () {
+        toast(options.failure);
+      })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = label;
+      });
+  }
+
+  function disarmCookies() {
+    cookiesArmed = false;
+    clearTimeout(cookiesArmTimer);
+    clearCookiesBtn.classList.remove("armed");
+    clearCookiesBtn.textContent = "Clear cookies";
+  }
+
+  if (!electronApi || typeof electronApi.clearCache !== "function" || typeof electronApi.clearCookies !== "function") {
+    [clearCacheBtn, clearCookiesBtn].forEach(function (btn) {
+      btn.disabled = true;
+      btn.title = "Only available in the desktop app";
+    });
+  } else {
+    clearCacheBtn.addEventListener("click", function () {
+      runStorageAction(clearCacheBtn, {
+        busy: "Clearing...",
+        success: "Cache cleared",
+        failure: "Could not clear the cache",
+        run: function () { return electronApi.clearCache(); }
+      });
+    });
+
+    // Signing out of every site is hard to undo, so the first click only arms
+    // the button and says what will happen.
+    clearCookiesBtn.addEventListener("click", function () {
+      if (!cookiesArmed) {
+        cookiesArmed = true;
+        clearCookiesBtn.classList.add("armed");
+        clearCookiesBtn.textContent = "Sign out everywhere?";
+        clearTimeout(cookiesArmTimer);
+        cookiesArmTimer = setTimeout(disarmCookies, 4000);
+        return;
+      }
+      disarmCookies();
+      runStorageAction(clearCookiesBtn, {
+        busy: "Clearing...",
+        success: "Cookies cleared, signed out of all sites",
+        failure: "Could not clear cookies",
+        run: function () { return electronApi.clearCookies(); }
+      });
+    });
+  }
 
   document.getElementById("settingsDone").addEventListener("click", closeSettings);
   settingsModal.addEventListener("click", function (event) {

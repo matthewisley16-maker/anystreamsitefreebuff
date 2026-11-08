@@ -3,12 +3,14 @@
 // web view docked below the app's own header, so they feel part of the app.
 
 const path = require("node:path");
-const { app, BrowserWindow, WebContentsView, ipcMain, shell, Menu } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, Menu, session } = require("electron");
 
 const APP_ROOT = path.join(__dirname, "..");
 // Must match the .nav heights in index.html.
 const HEADER_HEIGHT = 68;
 const COLLAPSED_HEIGHT = 30;
+// Persistent partition: cookies and logins survive a restart.
+const SITE_PARTITION = "persist:anystreamsite";
 
 let mainWindow = null;
 let siteView = null;
@@ -77,7 +79,7 @@ function openSite(url) {
   siteView = new WebContentsView({
     webPreferences: {
       // Persisted partition keeps logins between launches.
-      partition: "persist:anystreamsite",
+      partition: SITE_PARTITION,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -192,6 +194,43 @@ ipcMain.handle("site:chrome", function (_event, hidden) {
   headerInset = hidden ? COLLAPSED_HEIGHT : HEADER_HEIGHT;
   layoutSiteView();
   return headerInset;
+});
+
+function siteSession() {
+  try {
+    return session.fromPartition(SITE_PARTITION);
+  } catch (err) {
+    return null;
+  }
+}
+
+// The library's own storage lives in the default session, so both of these only
+// touch what the streaming sites kept behind.
+ipcMain.handle("data:clear-cache", async function () {
+  const ses = siteSession();
+  if (!ses) return { ok: false };
+  try {
+    await ses.clearCache();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || String(err) };
+  }
+});
+
+ipcMain.handle("data:clear-cookies", async function () {
+  const ses = siteSession();
+  if (!ses) return { ok: false };
+  try {
+    // Sign-in state mostly lives in cookies, but many sites also keep tokens in
+    // local storage, IndexedDB or a service worker. Wiping cookies alone would
+    // leave the user signed in, so clear everything the sites stored.
+    await ses.clearStorageData({
+      storages: ["cookies", "localstorage", "indexdb", "websql", "serviceworkers", "cachestorage"]
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || String(err) };
+  }
 });
 
 app.whenReady().then(function () {

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("anystreamElectron", {
   goBack: function () { return ipcRenderer.invoke("site:back"); },
   goForward: function () { return ipcRenderer.invoke("site:forward"); },
   setChromeHidden: function (hidden) { return ipcRenderer.invoke("site:chrome", !!hidden); },
+  clearCache: function () { return ipcRenderer.invoke("data:clear-cache"); },
+  clearCookies: function () { return ipcRenderer.invoke("data:clear-cookies"); },
   onSiteState: function (callback) {
     ipcRenderer.on("site:state", function (_event, state) { callback(state); });
   },
