@@ -144,7 +144,7 @@
 
   function selectFocus() {
     var list = focusables();
-    var el = document.activeElement;
+    var el = focused && list.indexOf(focused) !== -1 ? focused : document.activeElement;
     if (list.indexOf(el) === -1) {
       if (!list.length) return false;
       return focusEl(list[0]);
@@ -155,13 +155,34 @@
       if (type === "checkbox" || type === "radio" || type === "button" || type === "submit") el.click();
       return true;
     }
-    el.click();
+    return activateElement(el);
+  }
+
+  function activateElement(target, eventTarget) {
+    if (!target) return false;
+    try { target.focus({ preventScroll: true }); } catch (err) {}
+    var source = eventTarget || target;
+    var r = target.getBoundingClientRect();
+    var options = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: r.left + r.width / 2,
+      clientY: r.top + r.height / 2,
+      button: 0
+    };
+    try { source.dispatchEvent(new MouseEvent("mousedown", options)); } catch (err) {}
+    try { source.dispatchEvent(new MouseEvent("mouseup", options)); } catch (err) {}
+    // target.click() activates links and buttons; using the nearest link/button
+    // for a child element is what makes nested hyperlink text clickable.
+    try { target.click(); } catch (err) {}
     return true;
   }
 
   function ensurePointer() {
     if (pointer.overlay && document.documentElement.contains(pointer.overlay)) {
       pointer.overlay.style.display = "block";
+      setPointerScrollbars(true);
       return pointer.overlay;
     }
     var overlay = document.createElement("div");
@@ -173,11 +194,27 @@
       "transform:translate(-50%,-50%);z-index:2147483647;pointer-events:none;display:block;";
     document.documentElement.appendChild(overlay);
     pointer.overlay = overlay;
+    setPointerScrollbars(true);
     if (!pointer.x || !pointer.y) {
       pointer.x = Math.round(window.innerWidth / 2);
       pointer.y = Math.round(window.innerHeight / 2);
     }
     return overlay;
+  }
+
+  function setPointerScrollbars(hidden) {
+    var id = "__anystream_pointer_scrollbars";
+    var existing = document.getElementById(id);
+    if (!hidden) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    var style = document.createElement("style");
+    style.id = id;
+    style.textContent = "html,body{scrollbar-width:none!important;}" +
+      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;}";
+    (document.head || document.documentElement).appendChild(style);
   }
 
   function restorePointerTarget() {
@@ -223,15 +260,18 @@
     }
   }
 
-  function scrollPointer(stepX, stepY) {
+  function scrollPointer(dir, stepX, stepY) {
     var x = window.scrollX || window.pageXOffset || 0;
     var y = window.scrollY || window.pageYOffset || 0;
     var dx = 0;
     var dy = 0;
-    if (pointer.x < stepX) dx = -stepX * 2;
-    else if (pointer.x > window.innerWidth - stepX) dx = stepX * 2;
-    if (pointer.y < stepY) dy = -stepY * 2;
-    else if (pointer.y > window.innerHeight - stepY) dy = stepY * 2;
+    // Scroll only in the direction being pressed. Previously a press near
+    // the right or bottom edge could scroll sideways or downward even while
+    // the user was moving Up.
+    if (dir === "left" && pointer.x < stepX) dx = -stepX * 2;
+    else if (dir === "right" && pointer.x > window.innerWidth - stepX) dx = stepX * 2;
+    else if (dir === "up" && pointer.y < stepY) dy = -stepY * 2;
+    else if (dir === "down" && pointer.y > window.innerHeight - stepY) dy = stepY * 2;
     if (!dx && !dy) return;
     try {
       window.scrollTo({ left: x + dx, top: y + dy, behavior: "auto" });
@@ -251,32 +291,24 @@
 
     pointer.x = Math.max(1, Math.min(window.innerWidth - 2, pointer.x));
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
-    scrollPointer(stepX, stepY);
+    scrollPointer(dir, stepX, stepY);
     drawPointer();
     return true;
   }
 
   function clickPointer() {
     ensurePointer();
-    var target = actionableAt(pointer.x, pointer.y);
-    if (!target) return false;
-    try { target.focus({ preventScroll: true }); } catch (err) {}
-    var options = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: pointer.x,
-      clientY: pointer.y,
-      button: 0
-    };
-    try { target.dispatchEvent(new MouseEvent("mousedown", options)); } catch (err) {}
-    try { target.dispatchEvent(new MouseEvent("mouseup", options)); } catch (err) {}
-    try { target.click(); } catch (err) {}
-    return true;
+    var exact = document.elementFromPoint(pointer.x, pointer.y);
+    if (!exact || exact === pointer.overlay) return false;
+    // Send the mouse events at the exact touched element, then activate the
+    // nearest link/button so text nested inside an <a> still follows the link.
+    var target = exact.closest ? exact.closest(SELECTOR) : null;
+    return activateElement(target || exact, exact);
   }
 
   function hidePointer() {
     restorePointerTarget();
+    setPointerScrollbars(false);
     if (pointer.overlay) pointer.overlay.style.display = "none";
   }
 

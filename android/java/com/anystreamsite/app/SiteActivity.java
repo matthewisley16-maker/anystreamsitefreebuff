@@ -71,6 +71,13 @@ public class SiteActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        if (tv && "pointer".equals(siteNavMode)) {
+            // The pointer is the navigation device in this mode; an overlaid
+            // scrollbar must not steal its clicks or obscure its movement.
+            web.setVerticalScrollBarEnabled(false);
+            web.setHorizontalScrollBarEnabled(false);
+            web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        }
 
         // Same persistent cookie jar as the library, so sign-ins stick between
         // launches until the user clears them in Settings.
