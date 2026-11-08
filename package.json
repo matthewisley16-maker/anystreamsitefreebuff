@@ -45,7 +45,7 @@
       "perMachine": false,
       "runAfterFinish": true,
       "shortcutName": "anystreamsite",
-      "artifactName": "anystreamsitev1.1-setup.${ext}"
+      "artifactName": "anystreamsitev1.1-windows-x64-setup.${ext}"
     }
   }
 }

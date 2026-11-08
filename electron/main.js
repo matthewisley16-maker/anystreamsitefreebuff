@@ -12,6 +12,9 @@ const COLLAPSED_HEIGHT = 30;
 // Persistent partition: cookies and logins survive a restart.
 const SITE_PARTITION = "persist:anystreamsite";
 
+// The opening splash plays a short sound before the window has been clicked.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 let mainWindow = null;
 let siteView = null;
 let headerInset = HEADER_HEIGHT;
