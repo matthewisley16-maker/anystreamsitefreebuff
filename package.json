@@ -1,0 +1,14 @@
+{
+  "name": "anystreamsite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Your streaming sites in one window.",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3"
+  }
+}
