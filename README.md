@@ -11,10 +11,10 @@ Grab the latest build from the [releases page](https://github.com/matthewisley16
 | Build | File | For |
 | --- | --- | --- |
 | Windows | `anystreamsitev1.1-windows-x64-setup.exe` | Windows 10 and 11, 64-bit |
-| Android phone / tablet | `anystreamsitev1.1-phone-v18.apk` | Android 6.0 and newer |
-| Android TV | `anystreamsitev1.1-android-tv-v18.apk` | Android TV 6.0 and newer |
+| Android phone / tablet | `anystreamsitev1.1-phone-v19.apk` | Android 6.0 and newer |
+| Android TV | `anystreamsitev1.1-android-tv-v19.apk` | Android TV 6.0 and newer |
 
-The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have. The APK names include the Android versionCode (18), which distinguishes this rebuilt package from the earlier v1.1 APKs.
+The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have. The APK names include the Android versionCode (19), which distinguishes this rebuilt package from the earlier v1.1 APKs.
 
 ## Features
 
@@ -32,7 +32,7 @@ The Windows file name carries the version, the platform and the architecture, so
 - **Search** your library from the top bar
 - **Storage controls** — clear cached pages, or clear cookies to sign out of every site
 - **Remote friendly on TV** — native D-pad handling in the library and inside opened sites, a visible focus ring and extra large tiles; **OK** selects the highlighted tile, link or button
-- **Two TV site controls** — use focus navigation or a D-pad-controlled mouse cursor inside opened sites; the pointer clicks the exact hyperlink or control beneath it, including nested link text, and site scrollbars do not interfere with its movement
+- **Two TV site controls** — use focus navigation or a D-pad-controlled mouse cursor inside opened sites; the pointer uses a native tap to activate the hyperlink or control beneath it, including nested link text, iframe content and links under transparent layers, with no target outline and no side-scrollbar interference
 
 ## Windows 10 / 11 (64-bit)
 
@@ -44,7 +44,7 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android phone / tablet
 
-1. Copy `anystreamsitev1.1-phone-v18.apk` to the device, or download it directly in the browser.
+1. Copy `anystreamsitev1.1-phone-v19.apk` to the device, or download it directly in the browser.
 2. Open the file and allow installs from unknown sources when Android asks.
 3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build. If Android blocks the install, tap **More details**, then **Install anyway**; the manifest targets Android 14, so the "made for an older version" warning no longer applies.
 4. Open the app, paste a site URL and add it. Two tiles sit per row on a normal handset.
@@ -52,18 +52,18 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android TV
 
-1. Install `anystreamsitev1.1-android-tv-v18.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
+1. Install `anystreamsitev1.1-android-tv-v19.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
 
    ```bash
-   adb install anystreamsitev1.1-android-tv-v18.apk
+   adb install anystreamsitev1.1-android-tv-v19.apk
    ```
 
 2. anystreamsite appears in the TV launcher after installing.
 3. Move around with the D-pad: left, right, up and down jump between tiles, and **OK** opens the highlighted site. Up from the tiles reaches the top bar, where you can select Settings or Add site. Down from the top bar lands on the **Paste a site URL** field; **Right** moves to **Add to library**, and **OK** on the URL field opens the keyboard. In **Settings → TV navigation**, choose **D-pad focus** or **Mouse cursor** for opened sites.
 4. **Hold OK** on a tile to open its **Edit site / Remove site** menu. The menu also has a Remove confirmation.
-5. Inside an opened site, **D-pad focus** moves through links and buttons and **OK** activates the highlighted control. In **Mouse cursor** mode, the arrows move the cursor and **OK** clicks the hyperlink or control it is touching; the site scrollbar is hidden so it cannot catch the pointer. Edge scrolling follows the direction pressed, so Up never scrolls downward. Press **Down** to hide the site toolbar; press **Up** to bring it back.
+5. Inside an opened site, **D-pad focus** moves through links and buttons and **OK** activates the highlighted control. In **Mouse cursor** mode, the arrows move the dot and **OK** native-taps the hyperlink or control beneath it, including links in frames or under transparent layers. The dot is the only pointer highlight, site scrollbars are hidden, and page scrolling at the top/bottom edge is deliberately slow. Press **Down** to hide the site toolbar; press **Up** to bring it back.
 6. **Back** closes Settings and other dialogs instead of leaving the app. Inside a site it walks the site's history; when there is no more history it returns to the library. At the library home screen, Back sends the app to the TV home screen instead of killing the task.
-7. If you already have an earlier v1.1 TV build, install this APK over it. Its versionCode is 18, so Android accepts it as an update without uninstalling first.
+7. If you already have an earlier v1.1 TV build, install this APK over it. Its versionCode is 19, so Android accepts it as an update without uninstalling first.
 
 The TV build uses a compact 10-foot layout that scales from 720p through 4K, with larger tiles, focus outlines and no heavy blur effects, so it stays readable and smooth on low-power boxes. Links inside a site stay in the same view, and **Back** walks the site's history before returning to the library.
 
@@ -131,4 +131,4 @@ APKs are written to `dist/android/` and signed with the keystore referenced by t
 
 ## Version
 
-Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, gives Android TV a native 10-foot layout, and fixes TV remote input with a native D-pad bridge, visible focus rings and OK/Enter selection. The TV APK is compile-time flagged as TV, so its native key handling cannot be skipped by a device feature check, and the controller tracks the highlighted element when Android drops DOM focus. Empty-library Add actions are focusable, the site-level controller makes the D-pad work inside opened sites, and the add form asks Android to keep the keyboard visible. The TV D-pad now stops on the hero URL field and its Add to library button instead of skipping straight to the tiles. Holding OK on a tile opens a long-press Edit/Remove menu, Down hides the site toolbar, and Back closes dialogs, walks site history, and returns to the library without killing the task. Sites now also support a selectable D-pad mouse cursor for links that reject keyboard focus; v18 makes the pointer click the hyperlink or control beneath it, including nested hyperlink text, and hides the site scrollbar so it cannot interfere with cursor movement.
+Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, gives Android TV a native 10-foot layout, and fixes TV remote input with a native D-pad bridge, visible focus rings and OK/Enter selection. The TV APK is compile-time flagged as TV, so its native key handling cannot be skipped by a device feature check, and the controller tracks the highlighted element when Android drops DOM focus. Empty-library Add actions are focusable, the site-level controller makes the D-pad work inside opened sites, and the add form asks Android to keep the keyboard visible. The TV D-pad now stops on the hero URL field and its Add to library button instead of skipping straight to the tiles. Holding OK on a tile opens a long-press Edit/Remove menu, Down hides the site toolbar, and Back closes dialogs, walks site history, and returns to the library without killing the task. Sites now also support a selectable D-pad mouse cursor for links that reject keyboard focus; v19 makes the pointer native-tap the hyperlink or control beneath it, including nested link text, iframe links and links under transparent layers, without drawing target outlines or letting the side scroller move the page.

@@ -4,11 +4,14 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -77,6 +80,7 @@ public class SiteActivity extends Activity {
             web.setVerticalScrollBarEnabled(false);
             web.setHorizontalScrollBarEnabled(false);
             web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+            web.addJavascriptInterface(new PointerBridge(), "__anystreamPointerBridge");
         }
 
         // Same persistent cookie jar as the library, so sign-ins stick between
@@ -200,6 +204,32 @@ public class SiteActivity extends Activity {
             siteDpadScript = "";
         }
         return siteDpadScript;
+    }
+
+    /** Coordinates arrive normalized so WebView zoom and toolbar layout do not
+     * change which point on the page receives the tap. */
+    private final class PointerBridge {
+        @JavascriptInterface
+        public void clickAt(float xRatio, float yRatio) {
+            if (web == null) return;
+            final int width = web.getWidth();
+            final int height = web.getHeight();
+            if (width <= 0 || height <= 0) return;
+            final float x = Math.max(1f, Math.min(width - 2, xRatio * width));
+            final float y = Math.max(1f, Math.min(height - 2, yRatio * height));
+            web.post(new Runnable() {
+                @Override public void run() {
+                    long down = SystemClock.uptimeMillis();
+                    MotionEvent press = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0);
+                    web.dispatchTouchEvent(press);
+                    press.recycle();
+                    long up = SystemClock.uptimeMillis();
+                    MotionEvent release = MotionEvent.obtain(down, up, MotionEvent.ACTION_UP, x, y, 0);
+                    web.dispatchTouchEvent(release);
+                    release.recycle();
+                }
+            });
+        }
     }
 
     @Override

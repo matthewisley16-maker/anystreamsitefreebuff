@@ -5,7 +5,8 @@
   var MODE = window.__anystreamSiteNavMode === "pointer" ? "pointer" : "dpad";
   var focused = null;
   var saved = null;
-  var pointer = { x: 0, y: 0, overlay: null, target: null, saved: null };
+  var pointer = { x: 0, y: 0, overlay: null };
+  var lastPointerScrollAt = 0;
   var SELECTOR = "a[href], area[href], button, input, select, textarea, summary, " +
     "[contenteditable='true'], [tabindex]:not([tabindex='-1']), " +
     "[role='button'], [role='link'], [role='menuitem'], [role='tab'], " +
@@ -158,17 +159,19 @@
     return activateElement(el);
   }
 
-  function activateElement(target, eventTarget) {
+  function activateElement(target, eventTarget, shouldFocus, clickX, clickY) {
     if (!target) return false;
-    try { target.focus({ preventScroll: true }); } catch (err) {}
+    if (shouldFocus !== false) {
+      try { target.focus({ preventScroll: true }); } catch (err) {}
+    }
     var source = eventTarget || target;
     var r = target.getBoundingClientRect();
     var options = {
       bubbles: true,
       cancelable: true,
       view: window,
-      clientX: r.left + r.width / 2,
-      clientY: r.top + r.height / 2,
+      clientX: clickX != null ? clickX : r.left + r.width / 2,
+      clientY: clickY != null ? clickY : r.top + r.height / 2,
       button: 0
     };
     try { source.dispatchEvent(new MouseEvent("mousedown", options)); } catch (err) {}
@@ -213,32 +216,10 @@
     var style = document.createElement("style");
     style.id = id;
     style.textContent = "html,body{scrollbar-width:none!important;}" +
-      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;}";
+      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;}" +
+      "*{-webkit-tap-highlight-color:transparent!important;}" +
+      ":focus,:focus-visible{outline:none!important;}";
     (document.head || document.documentElement).appendChild(style);
-  }
-
-  function restorePointerTarget() {
-    if (!pointer.target || !pointer.saved) {
-      pointer.target = null;
-      pointer.saved = null;
-      return;
-    }
-    try {
-      pointer.target.style.outline = pointer.saved.outline;
-      pointer.target.style.outlineOffset = pointer.saved.offset;
-    } catch (err) { /* the target may be gone */ }
-    pointer.target = null;
-    pointer.saved = null;
-  }
-
-  function actionableAt(x, y) {
-    var target = document.elementFromPoint(x, y);
-    if (!target || target === pointer.overlay) return null;
-    if (target.closest) {
-      var hit = target.closest(SELECTOR);
-      if (hit) return hit;
-    }
-    return target;
   }
 
   function drawPointer() {
@@ -247,36 +228,24 @@
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
     pointer.overlay.style.left = pointer.x + "px";
     pointer.overlay.style.top = pointer.y + "px";
-
-    var target = actionableAt(pointer.x, pointer.y);
-    if (target !== pointer.target) {
-      restorePointerTarget();
-      if (target) {
-        pointer.target = target;
-        pointer.saved = { outline: target.style.outline, offset: target.style.outlineOffset };
-        target.style.outline = "3px solid #e50914";
-        target.style.outlineOffset = "3px";
-      }
-    }
   }
 
-  function scrollPointer(dir, stepX, stepY) {
-    var x = window.scrollX || window.pageXOffset || 0;
+  function scrollPointer(dir) {
+    // Pointer movement is independent of the page scroller. Only a deliberate
+    // press while the dot is already at the top or bottom edge scrolls, and
+    // only vertically; the side scroller never moves the page.
+    if (dir !== "up" && dir !== "down") return;
+    var atEdge = dir === "up" ? pointer.y <= 3 : pointer.y >= window.innerHeight - 4;
+    if (!atEdge) return;
+    var now = Date.now();
+    if (now - lastPointerScrollAt < 250) return;
+    lastPointerScrollAt = now;
+    var step = 32;
     var y = window.scrollY || window.pageYOffset || 0;
-    var dx = 0;
-    var dy = 0;
-    // Scroll only in the direction being pressed. Previously a press near
-    // the right or bottom edge could scroll sideways or downward even while
-    // the user was moving Up.
-    if (dir === "left" && pointer.x < stepX) dx = -stepX * 2;
-    else if (dir === "right" && pointer.x > window.innerWidth - stepX) dx = stepX * 2;
-    else if (dir === "up" && pointer.y < stepY) dy = -stepY * 2;
-    else if (dir === "down" && pointer.y > window.innerHeight - stepY) dy = stepY * 2;
-    if (!dx && !dy) return;
     try {
-      window.scrollTo({ left: x + dx, top: y + dy, behavior: "auto" });
+      window.scrollTo({ left: window.scrollX || window.pageXOffset || 0, top: y + (dir === "up" ? -step : step), behavior: "auto" });
     } catch (err) {
-      window.scrollBy(dx, dy);
+      window.scrollBy(0, dir === "up" ? -step : step);
     }
   }
 
@@ -291,23 +260,41 @@
 
     pointer.x = Math.max(1, Math.min(window.innerWidth - 2, pointer.x));
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
-    scrollPointer(dir, stepX, stepY);
+    scrollPointer(dir);
     drawPointer();
     return true;
   }
 
   function clickPointer() {
     ensurePointer();
-    var exact = document.elementFromPoint(pointer.x, pointer.y);
+    // Android's native WebView tap handles links inside cross-origin frames
+    // and links covered by transparent layout layers, which a DOM click cannot.
+    if (window.__anystreamPointerBridge && typeof window.__anystreamPointerBridge.clickAt === "function") {
+      try {
+        window.__anystreamPointerBridge.clickAt(pointer.x / window.innerWidth, pointer.y / window.innerHeight);
+        return true;
+      } catch (err) {}
+    }
+    var stack = [];
+    try {
+      stack = document.elementsFromPoint ? document.elementsFromPoint(pointer.x, pointer.y) : [document.elementFromPoint(pointer.x, pointer.y)];
+    } catch (err) {
+      stack = [document.elementFromPoint(pointer.x, pointer.y)];
+    }
+    var exact = stack.length ? stack[0] : null;
     if (!exact || exact === pointer.overlay) return false;
-    // Send the mouse events at the exact touched element, then activate the
-    // nearest link/button so text nested inside an <a> still follows the link.
-    var target = exact.closest ? exact.closest(SELECTOR) : null;
-    return activateElement(target || exact, exact);
+    var hit = exact;
+    for (var i = 0; i < stack.length; i++) {
+      var candidate = stack[i];
+      if (!candidate || candidate === pointer.overlay) continue;
+      var action = candidate.closest ? candidate.closest(SELECTOR) : null;
+      if (action) { hit = action; break; }
+    }
+    var needsKeyboard = /^(INPUT|TEXTAREA|SELECT)$/.test(hit.tagName) || hit.isContentEditable;
+    return activateElement(hit, exact, needsKeyboard, pointer.x, pointer.y);
   }
 
   function hidePointer() {
-    restorePointerTarget();
     setPointerScrollbars(false);
     if (pointer.overlay) pointer.overlay.style.display = "none";
   }
@@ -315,6 +302,8 @@
   function setMode(mode) {
     MODE = mode === "pointer" ? "pointer" : "dpad";
     if (MODE === "pointer") {
+      restore();
+      focused = null;
       ensurePointer();
       drawPointer();
     } else {
