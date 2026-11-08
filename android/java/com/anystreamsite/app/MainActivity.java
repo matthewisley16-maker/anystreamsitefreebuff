@@ -122,14 +122,7 @@ public class MainActivity extends Activity {
         if (web != null) {
             // The viewer has closed; let the library drop its "site open" state.
             web.evaluateJavascript("window.__anystreamSiteClosed && window.__anystreamSiteClosed();", null);
-            if (tv) web.requestFocus();
         }
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && tv && web != null) web.requestFocus();
     }
 
     @Override
@@ -191,9 +184,17 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     if (web == null) return;
-                    web.requestFocus();
                     InputMethodManager input = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                    if (input != null) input.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
+                    if (input != null) {
+                        // Focus belongs to the HTML input, not the WebView view.
+                        // Calling requestFocus here can blur the input and make
+                        // Android dismiss the keyboard immediately after it opens.
+                        web.post(new Runnable() {
+                            @Override public void run() {
+                                if (web != null) input.showSoftInput(web, InputMethodManager.SHOW_FORCED);
+                            }
+                        });
+                    }
                 }
             });
         }

@@ -17,12 +17,26 @@ final class Tv {
     private Tv() {}
 
     static boolean isTv(Activity activity) {
+        // The TV and phone APKs are separate packages built from the same
+        // sources. This flag is compiled into each one, so a TV install never
+        // depends on a device feature or a metadata lookup to enable its keys.
+        if (BuildFlags.TV) return true;
         PackageManager pm = activity.getPackageManager();
+        // The TV APK has a leanback launcher entry. This is part of the package
+        // manifest, so it identifies our TV build even when the device omits
+        // the leanback system feature or its metadata is returned as a string.
+        try {
+            if (pm.getLeanbackLaunchIntentForPackage(activity.getPackageName()) != null) return true;
+        } catch (Exception ignored) {
+            // Fall through to the other TV signals.
+        }
         if (pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return true;
         try {
             ApplicationInfo info = pm.getApplicationInfo(
                     activity.getPackageName(), PackageManager.GET_META_DATA);
-            return info.metaData != null && info.metaData.getBoolean(META_TV, false);
+            if (info.metaData == null) return false;
+            Object flag = info.metaData.get(META_TV);
+            return flag != null && "true".equalsIgnoreCase(String.valueOf(flag));
         } catch (Exception ignored) {
             return false;
         }

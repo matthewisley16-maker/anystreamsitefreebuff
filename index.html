@@ -1825,7 +1825,16 @@ try {
     document.getElementById("fIcon").value = site && site.iconUrl ? site.iconUrl : "";
     modal.hidden = false;
     document.body.classList.add("locked");
-    setTimeout(function () { document.getElementById("fUrl").focus(); }, 40);
+    setTimeout(function () {
+      var input = document.getElementById("fUrl");
+      input.focus();
+      // Android's WebView can lose the IME when the form appears. Ask the
+      // native shell to show it after the input has focus; browser builds do
+      // not have this bridge.
+      if (window.AndroidShell && AndroidShell.showKeyboard) {
+        try { AndroidShell.showKeyboard(); } catch (err) {}
+      }
+    }, 40);
   }
 
   function closeModal() {

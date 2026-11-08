@@ -196,12 +196,6 @@ public class SiteActivity extends Activity {
                 "window.__anystreamSiteKey && window.__anystreamSiteKey('" + key + "')", null);
     }
 
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && tv && web != null) web.requestFocus();
-    }
-
     private void updateNav() {
         boolean canBack = web.canGoBack();
         boolean canForward = web.canGoForward();
@@ -263,7 +257,6 @@ public class SiteActivity extends Activity {
         super.onResume();
         if (web != null) web.onResume();
         updateNav();
-        if (tv) web.requestFocus();
     }
 
     @Override

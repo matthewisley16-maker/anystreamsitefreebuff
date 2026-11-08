@@ -57,7 +57,7 @@ const dpad = tv ? `
   }
   function navTargets() {
     return Array.prototype.slice.call(
-      document.querySelectorAll(".card, #settingsBtn, #addBtn, #search")
+      document.querySelectorAll(".card, .empty .btn, #settingsBtn, #addBtn, #search")
     ).filter(shown);
   }
   function openPanel() {
@@ -79,6 +79,14 @@ const dpad = tv ? `
     focusedEl = el;
     el.classList.add("tv-focused");
   }
+  function inList(el, list) {
+    return !!el && document.documentElement.contains(el) && list.indexOf(el) !== -1;
+  }
+  function currentIn(list) {
+    if (inList(document.activeElement, list)) return document.activeElement;
+    if (inList(focusedEl, list)) return focusedEl;
+    return document.activeElement;
+  }
   function reveal(el) {
     try { el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (err) {}
   }
@@ -90,15 +98,20 @@ const dpad = tv ? `
     }
     var first = cards()[0];
     if (first) { focusEl(first); reveal(first); return true; }
-    var fallback = document.querySelector("#settingsBtn, #addBtn, #search");
+    var emptyAction = document.querySelector(".empty .btn");
+    if (emptyAction) { focusEl(emptyAction); reveal(emptyAction); return true; }
+    var fallback = document.querySelector(".empty .btn, #settingsBtn, #addBtn, #search");
     if (fallback) { focusEl(fallback); return true; }
     return false;
   }
   function moveCard(dir) {
     var list = navTargets();
     if (!list.length) return focusFirst();
-    var current = document.activeElement;
-    if (list.indexOf(current) === -1) return focusFirst();
+    var current = currentIn(list);
+    if (list.indexOf(current) === -1) {
+      focusedEl = null;
+      return focusFirst();
+    }
     var r = current.getBoundingClientRect();
     var cx = r.left + r.width / 2;
     var cy = r.top + r.height / 2;
@@ -125,8 +138,8 @@ const dpad = tv ? `
   function movePanel(panel, dir) {
     var items = panelItems(panel);
     if (!items.length) return false;
-    var index = items.indexOf(document.activeElement);
-    if (index === -1) { focusEl(items[0]); reveal(items[0]); return true; }
+    var index = items.indexOf(currentIn(items));
+    if (index === -1) { focusedEl = null; focusEl(items[0]); reveal(items[0]); return true; }
     var step = dir === "down" || dir === "right" ? 1 : -1;
     var next = Math.min(items.length - 1, Math.max(0, index + step));
     if (next === index) return false;
@@ -139,7 +152,8 @@ const dpad = tv ? `
     var el = document.activeElement;
     if (panel) {
       var items = panelItems(panel);
-      if (items.indexOf(el) === -1) {
+      if (!inList(el, items) && inList(focusedEl, items)) el = focusedEl;
+      if (!inList(el, items)) {
         if (items.length) { focusEl(items[0]); reveal(items[0]); return true; }
         return false;
       }
@@ -162,7 +176,9 @@ const dpad = tv ? `
       }
       return true;
     }
-    if (!el) return focusFirst();
+    var targets = navTargets();
+    if (!inList(el, targets) && inList(focusedEl, targets)) el = focusedEl;
+    if (!el || !document.documentElement.contains(el)) return focusFirst();
     if (el.classList && el.classList.contains("card")) { el.click(); return true; }
     if (el.tagName === "BUTTON" || el.tagName === "A" || el.tagName === "INPUT" || el.getAttribute("role") === "button") {
       el.click();
@@ -195,6 +211,24 @@ const dpad = tv ? `
     focusedEl = el;
     el.classList.add("tv-focused");
   }, true);
+
+  // The library is rendered after the page script starts. If the initial
+  // focus call lands on the top bar before the cards exist, move to the first
+  // card as soon as the library appears (and after adding a first site).
+  function watchLibrary() {
+    if (!document.body || !window.MutationObserver) return;
+    var hadCards = cards().length > 0;
+    new MutationObserver(function () {
+      var nowCards = cards().length;
+      if (nowCards > 0 && !hadCards && !openPanel()) {
+        var active = document.activeElement;
+        if (!active || active.tagName !== "INPUT") focusFirst();
+      }
+      hadCards = nowCards > 0;
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.body) watchLibrary();
+  else document.addEventListener("DOMContentLoaded", watchLibrary);
   document.addEventListener("keydown", function (event) {
     // Native mode sends keys through __anystreamTvKey; this listener is the
     // fallback for browsers and emulators that deliver keys to the DOM.

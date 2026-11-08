@@ -51,7 +51,7 @@ build_variant() {
     -R "$work/res.zip" --java "$work/gen" --auto-add-overlay
 
   echo "== $variant: java =="
-  find "$ANDROID/java" "$work/gen" -name '*.java' | while read -r f; do cygpath -m "$f"; done > "$work/sources.txt"
+  find "$ANDROID/java" "$work/gen" "$ANDROID/variants/$variant/java" -name '*.java' | while read -r f; do cygpath -m "$f"; done > "$work/sources.txt"
   "$JDK/bin/javac.exe" -nowarn -encoding UTF-8 -source 8 -target 8 \
     -bootclasspath "$PLATFORM" -d "$work/classes" @"$work/sources.txt"
 
