@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -13,6 +15,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 
 /**
  * The library screen. It renders the same index.html the desktop app uses, so
@@ -22,6 +25,18 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
     private WebView web;
     private boolean tv;
+    private final Handler keyHandler = new Handler(Looper.getMainLooper());
+    private boolean selectDown;
+    private boolean selectLongFired;
+    private final Runnable longSelect = new Runnable() {
+        @Override
+        public void run() {
+            if (!selectDown || web == null) return;
+            selectLongFired = true;
+            web.evaluateJavascript(
+                    "window.__anystreamTvLongSelect && window.__anystreamTvLongSelect()", null);
+        }
+    };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -48,16 +63,6 @@ public class MainActivity extends Activity {
         web.setHorizontalScrollBarEnabled(false);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setBackgroundColor(0xFF000000);
-        web.setOnKeyListener(new View.OnKeyListener() {
-            @Override
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                if (!tv) return false;
-                String key = Tv.keyFor(keyCode);
-                if (key == null) return false;
-                if (event.getAction() == KeyEvent.ACTION_DOWN) sendTvKey(key);
-                return true;
-            }
-        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -95,8 +100,31 @@ public class MainActivity extends Activity {
         String key = Tv.keyFor(event.getKeyCode());
         if (key == null) return super.dispatchKeyEvent(event);
 
+        if ("select".equals(key)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) {
+                    selectDown = true;
+                    selectLongFired = false;
+                    keyHandler.removeCallbacks(longSelect);
+                    keyHandler.postDelayed(longSelect, 650);
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                keyHandler.removeCallbacks(longSelect);
+                boolean shortPress = selectDown && !selectLongFired;
+                selectDown = false;
+                if (shortPress) sendTvKey("select");
+                return true;
+            }
+            return true;
+        }
+
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            if (!"select".equals(key) || event.getRepeatCount() == 0) sendTvKey(key);
+            // A direction press interrupts a pending long-select gesture.
+            keyHandler.removeCallbacks(longSelect);
+            selectDown = false;
+            sendTvKey(key);
         }
         return true;
     }
@@ -109,11 +137,23 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (web != null && web.canGoBack()) {
-            web.goBack();
+        if (web == null) {
+            super.onBackPressed();
             return;
         }
-        super.onBackPressed();
+        // Settings and the add/edit dialogs are DOM overlays, not WebView
+        // history entries. Let the page consume Back first, otherwise Android
+        // would close the whole app from inside Settings.
+        web.evaluateJavascript(
+                "window.__anystreamBack ? window.__anystreamBack() : false",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String handled) {
+                        if ("true".equals(handled)) return;
+                        if (web != null && web.canGoBack()) web.goBack();
+                        else moveTaskToBack(true);
+                    }
+                });
     }
 
     @Override
@@ -128,6 +168,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        keyHandler.removeCallbacks(longSelect);
+        selectDown = false;
+        selectLongFired = false;
         try {
             CookieManager.getInstance().flush();
         } catch (Throwable ignored) {

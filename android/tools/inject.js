@@ -13,6 +13,19 @@ const tv = variant === "tv";
 const shim = `
 <script>
 (function () {
+  window.__anystreamBack = function () {
+    var open = document.querySelector(".backdrop:not([hidden])");
+    var viewer = document.getElementById("viewer");
+    if (!open && (!viewer || viewer.hidden)) return false;
+    // Reuse the page's Escape handling so Settings, the add/edit form, the
+    // welcome panel and the in-app viewer all close before Android exits.
+    try {
+      document.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Escape", code: "Escape", bubbles: true
+      }));
+    } catch (err) {}
+    return true;
+  };
   if (!window.AndroidShell) return;
   var closed = null;
   // The page thinks it is talking to the Electron shell; these calls land in
@@ -45,6 +58,8 @@ const dpad = tv ? `
 <script>
 (function () {
   var focusedEl = null;
+  var tvMenu = null;
+  var tvMenuCard = null;
   function shown(el) {
     if (!el || el.hidden) return false;
     var style = window.getComputedStyle(el);
@@ -212,7 +227,116 @@ const dpad = tv ? `
     }
     return focusFirst();
   }
+
+  function menuButtons() {
+    return document.getElementById("tvActionsButtons");
+  }
+
+  function ensureTvMenu() {
+    if (tvMenu) return tvMenu;
+    tvMenu = document.createElement("div");
+    tvMenu.className = "backdrop tv-card-menu";
+    tvMenu.id = "tvCardMenu";
+    tvMenu.hidden = true;
+    tvMenu.innerHTML = '<div class="panel tv-actions-panel" role="dialog" aria-modal="true" aria-labelledby="tvActionsTitle">' +
+      '<h2 id="tvActionsTitle"></h2>' +
+      '<p class="hint" id="tvActionsHint">Edit this site&rsquo;s details, or remove it from your library.</p>' +
+      '<div class="panel-actions" id="tvActionsButtons">' +
+        '<button class="btn btn-ghost" type="button" data-tv-action="edit">Edit site</button>' +
+        '<button class="btn btn-ghost" type="button" data-tv-action="delete">Remove site</button>' +
+        '<button class="btn btn-primary" type="button" data-tv-action="cancel">Cancel</button>' +
+      '</div>' +
+      '</div>';
+    document.body.appendChild(tvMenu);
+    tvMenu.addEventListener("click", handleTvMenuClick);
+    return tvMenu;
+  }
+
+  function closeTvMenu(restoreFocus) {
+    if (!tvMenu || tvMenu.hidden) return;
+    var card = tvMenuCard;
+    tvMenu.hidden = true;
+    tvMenuCard = null;
+    if (!document.querySelector(".backdrop:not([hidden])") &&
+        (!document.getElementById("viewer") || document.getElementById("viewer").hidden)) {
+      document.body.classList.remove("locked");
+    }
+    if (restoreFocus !== false && card && document.documentElement.contains(card)) {
+      focusEl(card);
+      reveal(card);
+    } else if (restoreFocus !== false) {
+      focusFirst();
+    }
+  }
+
+  function openTvMenu(card) {
+    if (!card || !document.documentElement.contains(card)) return false;
+    var menu = ensureTvMenu();
+    var nameEl = card.querySelector(".card-name");
+    tvMenuCard = card;
+    document.getElementById("tvActionsTitle").textContent = nameEl ? nameEl.textContent : "Site";
+    document.getElementById("tvActionsHint").textContent = "Edit this site's details, or remove it from your library.";
+    menuButtons().innerHTML =
+      '<button class="btn btn-ghost" type="button" data-tv-action="edit">Edit site</button>' +
+      '<button class="btn btn-ghost" type="button" data-tv-action="delete">Remove site</button>' +
+      '<button class="btn btn-primary" type="button" data-tv-action="cancel">Cancel</button>';
+    menu.hidden = false;
+    document.body.classList.add("locked");
+    var items = panelItems(menu.querySelector(".panel"));
+    if (items.length) { focusEl(items[0]); reveal(items[0]); }
+    return true;
+  }
+
+  function confirmTvDelete() {
+    if (!tvMenuCard) return;
+    var nameEl = tvMenuCard.querySelector(".card-name");
+    var name = nameEl ? nameEl.textContent : "this site";
+    document.getElementById("tvActionsTitle").textContent = "Remove " + name + "?";
+    document.getElementById("tvActionsHint").textContent = "This removes the site from your library. You can add it again later.";
+    menuButtons().innerHTML =
+      '<button class="btn btn-primary" type="button" data-tv-action="delete-confirm">Remove site</button>' +
+      '<button class="btn btn-ghost" type="button" data-tv-action="cancel">Keep site</button>';
+    var items = panelItems(tvMenu.querySelector(".panel"));
+    if (items.length) { focusEl(items[0]); reveal(items[0]); }
+  }
+
+  function handleTvMenuClick(event) {
+    var button = event.target && event.target.closest ? event.target.closest("[data-tv-action]") : null;
+    if (!button || !tvMenu || tvMenu.hidden) return;
+    var action = button.getAttribute("data-tv-action");
+    var card = tvMenuCard;
+    if (action === "edit") {
+      closeTvMenu(false);
+      var edit = card && card.querySelector("[data-action='edit']");
+      if (edit) edit.click();
+      return;
+    }
+    if (action === "delete") { confirmTvDelete(); return; }
+    if (action === "delete-confirm") {
+      closeTvMenu(false);
+      var remove = card && card.querySelector("[data-action='delete']");
+      if (!remove) return;
+      // The shared library handler asks for confirmation. The TV menu has
+      // already shown its own confirmation, so answer it for this click.
+      var realConfirm = window.confirm;
+      window.confirm = function () { return true; };
+      try { remove.click(); } finally { window.confirm = realConfirm; }
+      return;
+    }
+    closeTvMenu(true);
+  }
+
+  function longSelect() {
+    if (openPanel()) return false;
+    var target = document.activeElement;
+    var card = target && target.closest ? target.closest(".card") : null;
+    if (!card && focusedEl && focusedEl.closest) card = focusedEl.closest(".card");
+    if (!card) return false;
+    return openTvMenu(card);
+  }
+  window.__anystreamTvLongSelect = longSelect;
   function handleKey(key) {
+    if (key === "longSelect") return longSelect();
     if (key === "select") return activate();
     if (key !== "left" && key !== "right" && key !== "up" && key !== "down") return false;
     var panel = openPanel();
@@ -246,6 +370,12 @@ const dpad = tv ? `
   if (document.body) watchLibrary();
   else document.addEventListener("DOMContentLoaded", watchLibrary);
   document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && tvMenu && !tvMenu.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeTvMenu(true);
+      return;
+    }
     // Native mode sends keys through __anystreamTvKey; this listener is the
     // fallback for browsers and emulators that deliver keys to the DOM.
     if (window.__anystreamNativeKeys) return;
@@ -383,6 +513,12 @@ const css = tv ? `
     animation: none;
   }
   .settings-panel { width: min(760px, 86vw); }
+  .tv-actions-panel { width: min(560px, 84vw); }
+  .tv-actions-panel .panel-actions {
+    margin-top: clamp(16px, 2vh, 24px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .panel h2 { font-size: clamp(20px, 1.6vw, 28px); }
   .panel .hint { font-size: clamp(13px, 0.95vw, 16px); margin-bottom: clamp(14px, 2vh, 22px); }
   .settings-section { padding: clamp(10px, 1.4vh, 16px) 0; }

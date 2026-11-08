@@ -31,6 +31,8 @@ public class SiteActivity extends Activity {
     private ImageButton forwardBtn;
     private ProgressBar progress;
     private FrameLayout stage;
+    private View chrome;
+    private boolean chromeHidden;
     private View customView;
     private WebChromeClient.CustomViewCallback customCallback;
     private boolean tv;
@@ -48,6 +50,7 @@ public class SiteActivity extends Activity {
         forwardBtn = (ImageButton) findViewById(R.id.forwardBtn);
         progress = (ProgressBar) findViewById(R.id.progress);
         stage = (FrameLayout) findViewById(R.id.stage);
+        chrome = findViewById(R.id.chrome);
 
         String url = getIntent().getStringExtra("url");
         String name = getIntent().getStringExtra("name");
@@ -142,7 +145,10 @@ public class SiteActivity extends Activity {
             @Override public void onClick(View v) { web.reload(); }
         });
         backBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { if (web.canGoBack()) web.goBack(); }
+            @Override public void onClick(View v) {
+                if (web.canGoBack()) web.goBack();
+                else finish();
+            }
         });
         forwardBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { if (web.canGoForward()) web.goForward(); }
@@ -186,6 +192,12 @@ public class SiteActivity extends Activity {
         if (!tv || customView != null) return super.dispatchKeyEvent(event);
         String key = Tv.keyFor(event.getKeyCode());
         if (key == null) return super.dispatchKeyEvent(event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            // Dropping into the page gets the site toolbar out of the way;
+            // moving back up brings it back for Back/Reload/Exit.
+            if ("down".equals(key) && !chromeHidden) setChromeHidden(true);
+            else if ("up".equals(key) && chromeHidden) setChromeHidden(false);
+        }
         if (event.getAction() == KeyEvent.ACTION_DOWN) sendSiteKey(key);
         return true;
     }
@@ -205,10 +217,18 @@ public class SiteActivity extends Activity {
         forwardBtn.setAlpha(canForward ? 1f : 0.35f);
     }
 
+    private void setChromeHidden(boolean hidden) {
+        if (chrome == null || chromeHidden == hidden) return;
+        chromeHidden = hidden;
+        chrome.setVisibility(hidden ? View.GONE : View.VISIBLE);
+        if (web != null) web.requestFocus();
+    }
+
     private void applyImmersive(boolean on) {
         View chrome = findViewById(R.id.chrome);
         if (on) {
             chrome.setVisibility(View.GONE);
+            chromeHidden = true;
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -216,6 +236,7 @@ public class SiteActivity extends Activity {
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         } else {
             chrome.setVisibility(View.VISIBLE);
+            chromeHidden = false;
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
@@ -238,7 +259,9 @@ public class SiteActivity extends Activity {
             updateNav();
             return;
         }
-        super.onBackPressed();
+        // The site has no more history: return to the app's library/home
+        // screen instead of closing the whole task.
+        finish();
     }
 
     @Override
@@ -256,6 +279,7 @@ public class SiteActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (web != null) web.onResume();
+        setChromeHidden(false);
         updateNav();
     }
 
