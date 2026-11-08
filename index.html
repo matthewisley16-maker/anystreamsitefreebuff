@@ -37,12 +37,12 @@ try {
     --red: var(--accent);
     --red-2: var(--accent-2);
 
-    --icon-size: 46px;
-    --icon-img: 30px;
-    --icon-radius: 11px;
-    --icon-font: 16px;
-    --card-pad: 14px;
-    --grid-min: 184px;
+    --icon-size: 104px;
+    --icon-img: 96px;
+    --icon-radius: 18px;
+    --icon-font: 40px;
+    --card-pad: 18px;
+    --grid-min: 176px;
 
     /* Content sits in one centred column on wide screens instead of
        stretching to the window edges. */
@@ -59,8 +59,8 @@ try {
   html[data-theme="sunset"]   { --accent: #ff7a1a; --accent-2: #ff9d4d; --accent-rgb: 255, 122, 26; --accent-deep: #6d2b00; }
 
   /* ---------- icon sizes ---------- */
-  html[data-size="sm"] { --icon-size: 34px; --icon-img: 22px; --icon-radius: 9px; --icon-font: 12px; --card-pad: 10px; --grid-min: 152px; }
-  html[data-size="lg"] { --icon-size: 62px; --icon-img: 40px; --icon-radius: 15px; --icon-font: 20px; --card-pad: 18px; --grid-min: 232px; }
+  html[data-size="sm"] { --icon-size: 76px; --icon-img: 70px; --icon-radius: 14px; --icon-font: 28px; --card-pad: 14px; --grid-min: 132px; }
+  html[data-size="lg"] { --icon-size: 172px; --icon-img: 160px; --icon-radius: 26px; --icon-font: 64px; --card-pad: 24px; --grid-min: 252px; }
 
   html, body { margin: 0; min-height: 100%; }
   body {
@@ -993,6 +993,72 @@ try {
     }
     .splash { display: none !important; }
   }
+
+  /* ---------- poster tiles ---------- */
+  /* One square per site: the icon picture is the square, and the name is laid
+     over the bottom of it instead of sitting beside a small icon. */
+  .card {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    aspect-ratio: 1 / 1;
+    padding: 18px 16px 46px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .card-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--icon-size);
+    height: var(--icon-size);
+  }
+  .site-icon {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    border-radius: var(--icon-radius);
+    background: transparent;
+    box-shadow: none;
+  }
+  .site-icon:not(.has-icon) {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  }
+  .site-icon img { width: var(--icon-img); height: var(--icon-img); }
+  .site-monogram { font-size: var(--icon-font); }
+  .card-body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 30px 12px 12px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.58) 46%, rgba(0, 0, 0, 0.9));
+  }
+  .card-name { color: #fff; text-align: center; font-size: 13.5px; }
+  .card-host { display: none; }
+  html[data-layout="bold"] .grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  html[data-layout="bold"] .card { min-height: 0; padding: 20px 18px 50px; }
+  html[data-layout="bold"] .card-body { width: auto; }
+  html[data-layout="bold"] .card-name { font-size: 15px; }
+
+  /* Minimal stays a compact list: small icon, text beside it. */
+  html[data-layout="minimal"] .card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    aspect-ratio: auto;
+    padding: 8px 10px;
+    text-align: left;
+    overflow: visible;
+  }
+  html[data-layout="minimal"] .card-icon { width: 40px; height: 40px; }
+  html[data-layout="minimal"] .site-icon { width: 36px; height: 36px; }
+  html[data-layout="minimal"] .site-icon img { width: 28px; height: 28px; }
+  html[data-layout="minimal"] .site-monogram { font-size: 15px; }
+  html[data-layout="minimal"] .card-body { position: static; flex: 1; min-width: 0; padding: 0; background: none; }
+  html[data-layout="minimal"] .card-name { text-align: left; color: var(--text); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -1578,7 +1644,7 @@ try {
     var host = hostOf(site.url);
     var list = [];
     if (site.iconUrl) list.push(site.iconUrl);
-    list.push("https://www.google.com/s2/favicons?domain=" + encodeURIComponent(host) + "&sz=128");
+    list.push("https://www.google.com/s2/favicons?domain=" + encodeURIComponent(host) + "&sz=256");
     list.push("https://icons.duckduckgo.com/ip3/" + host + ".ico");
     return list;
   }

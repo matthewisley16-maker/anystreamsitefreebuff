@@ -84,7 +84,7 @@ const dpad = tv ? `
 const css = tv ? `
 <style>
   /* 10-foot UI: bigger tiles, focus ring you can see from the sofa. */
-  html { --grid-min: 268px; --icon-size: 76px; --icon-img: 52px; --icon-radius: 18px; --icon-font: 24px; --card-pad: 20px; scrollbar-width: none; }
+  html { --grid-min: 300px; --icon-size: 190px; --icon-img: 178px; --icon-radius: 30px; --icon-font: 78px; --card-pad: 24px; scrollbar-width: none; }
   html[data-layout="minimal"] .grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   html[data-layout="bold"] .grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .card:focus, .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; transform: translateY(-3px); }
@@ -93,8 +93,8 @@ const css = tv ? `
 </style>` : `
 <style>
   /* Phone: two tiles per row on a normal handset, no tap flash. */
-  html { --grid-min: 146px; }
-  @media (max-width: 480px) { html { --grid-min: 132px; } }
+  html { --grid-min: 156px; --icon-size: 92px; --icon-img: 84px; --icon-radius: 18px; --icon-font: 34px; }
+  @media (max-width: 480px) { html { --grid-min: 140px; --icon-size: 82px; --icon-img: 74px; } }
   body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
   .card { -webkit-user-select: none; user-select: none; }
 </style>`;
