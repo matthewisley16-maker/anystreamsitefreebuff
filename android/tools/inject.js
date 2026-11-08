@@ -57,7 +57,7 @@ const dpad = tv ? `
   }
   function navTargets() {
     return Array.prototype.slice.call(
-      document.querySelectorAll(".card, .empty .btn, #settingsBtn, #addBtn, #search")
+      document.querySelectorAll("#quickUrl, #quickForm button, .card, .empty .btn, #settingsBtn, #addBtn, #search")
     ).filter(shown);
   }
   function openPanel() {
@@ -111,6 +111,15 @@ const dpad = tv ? `
     if (list.indexOf(current) === -1) {
       focusedEl = null;
       return focusFirst();
+    }
+    // Entering the hero from the top bar should land on the URL field, not
+    // the adjacent submit button. The button remains reachable with Right.
+    var quickUrl = document.getElementById("quickUrl");
+    var navBar = document.getElementById("nav");
+    if (dir === "down" && quickUrl && navBar && navBar.contains(current) && shown(quickUrl)) {
+      focusEl(quickUrl);
+      reveal(quickUrl);
+      return true;
     }
     var r = current.getBoundingClientRect();
     var cx = r.left + r.width / 2;
@@ -179,6 +188,13 @@ const dpad = tv ? `
     var targets = navTargets();
     if (!inList(el, targets) && inList(focusedEl, targets)) el = focusedEl;
     if (!el || !document.documentElement.contains(el)) return focusFirst();
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+      focusEl(el);
+      if (window.AndroidShell && AndroidShell.showKeyboard) {
+        try { AndroidShell.showKeyboard(); } catch (err) {}
+      }
+      return true;
+    }
     if (el.classList && el.classList.contains("card")) { el.click(); return true; }
     if (el.tagName === "BUTTON" || el.tagName === "A" || el.tagName === "INPUT" || el.getAttribute("role") === "button") {
       el.click();
