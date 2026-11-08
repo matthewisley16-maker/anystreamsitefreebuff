@@ -57,6 +57,11 @@ const shim = `
 const dpad = tv ? `
 <script>
 (function () {
+  function markTvPage() {
+    if (document.body) document.body.classList.add("tv");
+  }
+  if (document.body) markTvPage();
+  else document.addEventListener("DOMContentLoaded", markTvPage);
   var focusedEl = null;
   var tvMenu = null;
   var tvMenuCard = null;

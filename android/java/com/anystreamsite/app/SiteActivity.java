@@ -36,6 +36,7 @@ public class SiteActivity extends Activity {
     private View customView;
     private WebChromeClient.CustomViewCallback customCallback;
     private boolean tv;
+    private String siteNavMode;
     private String siteDpadScript;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -46,6 +47,9 @@ public class SiteActivity extends Activity {
 
         web = (WebView) findViewById(R.id.site);
         tv = Tv.isTv(this);
+        siteNavMode = getSharedPreferences("anystreamsite", MODE_PRIVATE)
+                .getString("site_nav_mode", "dpad");
+        if (!"pointer".equals(siteNavMode)) siteNavMode = "dpad";
         backBtn = (ImageButton) findViewById(R.id.backBtn);
         forwardBtn = (ImageButton) findViewById(R.id.forwardBtn);
         progress = (ProgressBar) findViewById(R.id.progress);
@@ -169,8 +173,12 @@ public class SiteActivity extends Activity {
     private void installSiteDpad(WebView view) {
         String script = siteDpadScript();
         if (script.length() == 0) return;
+        String mode = "pointer".equals(siteNavMode) ? "pointer" : "dpad";
         view.evaluateJavascript(
-                "window.__anystreamSiteNativeKeys = true;\n" + script, null);
+                "window.__anystreamSiteNavMode = \"" + mode + "\";" +
+                "window.__anystreamSiteNativeKeys = true;\n" + script +
+                "\nif (window.__anystreamSiteSetMode) window.__anystreamSiteSetMode(\"" + mode + "\");",
+                null);
     }
 
     private String siteDpadScript() {

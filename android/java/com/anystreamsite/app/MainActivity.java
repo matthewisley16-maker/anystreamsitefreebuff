@@ -246,5 +246,18 @@ public class MainActivity extends Activity {
         public boolean isTv() {
             return Tv.isTv(MainActivity.this);
         }
+
+        @JavascriptInterface
+        public String getSiteNavigationMode() {
+            return getSharedPreferences("anystreamsite", MODE_PRIVATE)
+                    .getString("site_nav_mode", "dpad");
+        }
+
+        @JavascriptInterface
+        public void setSiteNavigationMode(String mode) {
+            if (!"dpad".equals(mode) && !"pointer".equals(mode)) return;
+            getSharedPreferences("anystreamsite", MODE_PRIVATE)
+                    .edit().putString("site_nav_mode", mode).apply();
+        }
     }
 }

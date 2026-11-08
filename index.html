@@ -643,6 +643,8 @@ try {
 
   /* ---------- settings ---------- */
   .settings-panel { width: min(520px, 100%); }
+  .tv-nav-setting { display: none; }
+  body.tv .tv-nav-setting { display: block; }
   .settings-section { padding: 16px 0; border-top: 1px solid var(--line); }
   .settings-section:first-of-type { border-top: 0; padding-top: 8px; }
   .settings-section h3 {
@@ -1250,6 +1252,15 @@ try {
       </div>
     </section>
 
+    <section class="settings-section tv-nav-setting">
+      <h3>TV navigation</h3>
+      <div class="segmented" id="siteNavControl">
+        <button class="seg active" type="button" data-site-nav="dpad">D-pad focus</button>
+        <button class="seg" type="button" data-site-nav="pointer">Mouse cursor</button>
+      </div>
+      <p class="row-note">Choose how the remote moves inside opened sites. The cursor mode can click links that do not accept focus.</p>
+    </section>
+
     <section class="settings-section">
       <h3>Library</h3>
       <div class="settings-row">
@@ -1363,6 +1374,7 @@ try {
 
   var sites = loadSites();
   var settings = loadSettings();
+  var siteNavMode = "dpad";
   var searchQuery = "";
   var editingId = null;
   var activeSite = null;
@@ -1544,6 +1556,39 @@ try {
     applySettings();
   }
 
+  function applySiteNavMode() {
+    Array.prototype.forEach.call(document.querySelectorAll("#siteNavControl .seg[data-site-nav]"), function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-site-nav") === siteNavMode);
+    });
+  }
+
+  function loadSiteNavMode() {
+    var mode = "dpad";
+    try {
+      var stored = storage().getItem("anystreamsite.siteNav.v1");
+      if (stored === "dpad" || stored === "pointer") mode = stored;
+    } catch (err) { /* use default */ }
+    try {
+      if (window.AndroidShell && AndroidShell.getSiteNavigationMode) {
+        var nativeMode = AndroidShell.getSiteNavigationMode();
+        if (nativeMode === "dpad" || nativeMode === "pointer") mode = nativeMode;
+      }
+    } catch (err) { /* use local value */ }
+    siteNavMode = mode;
+    applySiteNavMode();
+  }
+
+  function setSiteNavMode(mode) {
+    if (mode !== "dpad" && mode !== "pointer") return;
+    siteNavMode = mode;
+    try { storage().setItem("anystreamsite.siteNav.v1", mode); } catch (err) { /* ignore */ }
+    try {
+      if (window.AndroidShell && AndroidShell.setSiteNavigationMode) AndroidShell.setSiteNavigationMode(mode);
+    } catch (err) { /* the native shell may be absent in a browser */ }
+    applySiteNavMode();
+    toast(mode === "pointer" ? "Sites will use a D-pad mouse cursor" : "Sites will use D-pad focus");
+  }
+
   function openSettings() {
     applySettings();
     settingsModal.hidden = false;
@@ -1577,6 +1622,11 @@ try {
 
   document.getElementById("motionToggle").addEventListener("change", function (event) {
     updateSetting("motion", event.target.checked);
+  });
+
+  document.getElementById("siteNavControl").addEventListener("click", function (event) {
+    var seg = event.target.closest(".seg[data-site-nav]");
+    if (seg) setSiteNavMode(seg.getAttribute("data-site-nav"));
   });
 
   document.getElementById("addPopularBtn").addEventListener("click", function () {
@@ -2246,6 +2296,7 @@ try {
   /* ---------------- boot ---------------- */
 
   applySettings();
+  loadSiteNavMode();
 
   if (electronApi) {
     document.body.classList.add("electron");
