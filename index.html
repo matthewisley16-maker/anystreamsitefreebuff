@@ -619,6 +619,28 @@ try {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.14);
   }
+  /* TV category picker: a native select popup is not reliably navigable with
+     a remote, so the TV build gets a real listbox it can focus. */
+  .tv-select { display: none; position: relative; }
+  body.tv .tv-select { display: block; }
+  body.tv #fCategory { display: none; }
+  .tv-select-button {
+    width: 100%; text-align: left; padding: 11px 13px; border-radius: 9px;
+    border: 1px solid #2b2b2b; background: #0b0b0b; color: var(--text);
+    font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tv-select-button::after { content: "\25BE"; float: right; color: var(--muted); }
+  .tv-select-menu {
+    margin-top: 6px; padding: 4px; border: 1px solid #333; border-radius: 9px;
+    background: #101010; max-height: 230px; overflow: auto;
+  }
+  .tv-select-menu[hidden] { display: none !important; }
+  .tv-select-option {
+    display: block; width: 100%; text-align: left; padding: 12px 13px;
+    border: 0; border-radius: 7px; background: transparent; color: var(--text);
+    font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tv-select-option:hover, .tv-select-option[aria-selected="true"] { background: var(--accent); color: #fff; }
   .field .sub { margin: 6px 0 0; font-size: 11px; color: #6c6c6c; }
   .form-error { margin: 0 0 14px; font-size: 12.5px; color: #ff6b72; }
   .panel-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
@@ -1181,6 +1203,16 @@ try {
           <option value="Free">Free</option>
           <option value="Other" selected>Other</option>
         </select>
+        <div class="tv-select" id="tvCategoryPicker">
+          <button class="tv-select-button" type="button" id="tvCategoryButton" aria-haspopup="listbox" aria-expanded="false">Other</button>
+          <div class="tv-select-menu" id="tvCategoryMenu" role="listbox" aria-label="Category" hidden>
+            <button class="tv-select-option" type="button" role="option" data-category="Movies &amp; TV">Movies &amp; TV</button>
+            <button class="tv-select-option" type="button" role="option" data-category="Live">Live</button>
+            <button class="tv-select-option" type="button" role="option" data-category="Music">Music</button>
+            <button class="tv-select-option" type="button" role="option" data-category="Free">Free</button>
+            <button class="tv-select-option" type="button" role="option" data-category="Other">Other</button>
+          </div>
+        </div>
       </div>
       <div class="field">
         <label for="fIcon">Custom icon URL</label>
@@ -1396,6 +1428,8 @@ try {
   var heroMeta = document.getElementById("heroMeta");
   var toastEl = document.getElementById("toast");
   var toastTimer = null;
+  var tvCategoryButton = document.getElementById("tvCategoryButton");
+  var tvCategoryMenu = document.getElementById("tvCategoryMenu");
 
   /* ---------------- helpers ---------------- */
 
@@ -1873,6 +1907,8 @@ try {
     document.getElementById("fName").value = site ? site.name : "";
     document.getElementById("fCategory").value = site ? site.category : "Other";
     document.getElementById("fIcon").value = site && site.iconUrl ? site.iconUrl : "";
+    syncTvCategory();
+    closeTvCategoryMenu();
     modal.hidden = false;
     document.body.classList.add("locked");
     setTimeout(function () {
@@ -1888,6 +1924,7 @@ try {
   }
 
   function closeModal() {
+    closeTvCategoryMenu();
     modal.hidden = true;
     editingId = null;
     if (viewer.hidden && settingsModal.hidden && welcomeModal.hidden) document.body.classList.remove("locked");
@@ -1932,6 +1969,48 @@ try {
   });
 
   /* ---------------- forms ---------------- */
+
+  function syncTvCategory() {
+    if (!tvCategoryButton) return;
+    var select = document.getElementById("fCategory");
+    var value = select.value || "Other";
+    tvCategoryButton.textContent = value;
+    Array.prototype.forEach.call(tvCategoryMenu.querySelectorAll("[data-category]"), function (option) {
+      option.setAttribute("aria-selected", option.getAttribute("data-category") === value ? "true" : "false");
+    });
+  }
+
+  function closeTvCategoryMenu() {
+    if (!tvCategoryButton) return;
+    tvCategoryMenu.hidden = true;
+    tvCategoryButton.setAttribute("aria-expanded", "false");
+  }
+
+  if (tvCategoryButton) {
+    tvCategoryButton.addEventListener("click", function (event) {
+      event.stopPropagation();
+      var open = tvCategoryMenu.hidden;
+      tvCategoryMenu.hidden = !open;
+      tvCategoryButton.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        setTimeout(function () {
+          var first = tvCategoryMenu.querySelector("[data-category]");
+          if (first && !tvCategoryMenu.hidden) first.focus();
+        }, 0);
+      }
+    });
+    tvCategoryMenu.addEventListener("click", function (event) {
+      var option = event.target.closest ? event.target.closest("[data-category]") : null;
+      if (!option) return;
+      var select = document.getElementById("fCategory");
+      select.value = option.getAttribute("data-category");
+      syncTvCategory();
+      closeTvCategoryMenu();
+      tvCategoryButton.focus();
+    });
+    document.getElementById("fCategory").addEventListener("change", syncTvCategory);
+    syncTvCategory();
+  }
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();

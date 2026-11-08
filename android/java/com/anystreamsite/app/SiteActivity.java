@@ -269,10 +269,8 @@ public class SiteActivity extends Activity {
             }
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            // Dropping into the page gets the site toolbar out of the way;
-            // moving back up brings it back for Back/Reload/Exit.
-            if ("down".equals(key) && !chromeHidden) setChromeHidden(true);
-            else if ("up".equals(key) && chromeHidden) setChromeHidden(false);
+            // Keep the toolbar's height stable while the D-pad moves through
+            // a site; hiding it on Down made the page jump under focus.
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN) sendSiteKey(key);
         return true;

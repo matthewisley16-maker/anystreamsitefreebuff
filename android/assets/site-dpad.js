@@ -6,6 +6,7 @@
   var focused = null;
   var saved = null;
   var pointer = { x: 0, y: 0, overlay: null };
+  var lastPointerScrollAt = 0;
   var lastFocusScrollAt = 0;
   var scrollMode = false;
   var scrollBadge = null;
@@ -250,6 +251,18 @@
 
     pointer.x = Math.max(1, Math.min(window.innerWidth - 2, pointer.x));
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
+
+    // Edge scrolling is vertical only and slow. The side scroller never moves
+    // the page, while moving the dot to the bottom still lets it go down.
+    if ((dir === "down" && pointer.y >= window.innerHeight - 4) ||
+        (dir === "up" && pointer.y <= 3)) {
+      var now = Date.now();
+      if (now - lastPointerScrollAt >= 180) {
+        lastPointerScrollAt = now;
+        var step = Math.max(24, Math.min(48, Math.round(window.innerHeight * 0.05)));
+        try { window.scrollBy(0, dir === "down" ? step : -step); } catch (err) {}
+      }
+    }
     drawPointer();
     return true;
   }
