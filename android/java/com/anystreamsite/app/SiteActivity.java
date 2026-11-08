@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -16,6 +17,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * One streaming site in its own WebView, with the same back / forward / reload /
@@ -29,6 +33,8 @@ public class SiteActivity extends Activity {
     private FrameLayout stage;
     private View customView;
     private WebChromeClient.CustomViewCallback customCallback;
+    private boolean tv;
+    private String siteDpadScript;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -37,6 +43,7 @@ public class SiteActivity extends Activity {
         setContentView(R.layout.activity_site);
 
         web = (WebView) findViewById(R.id.site);
+        tv = Tv.isTv(this);
         backBtn = (ImageButton) findViewById(R.id.backBtn);
         forwardBtn = (ImageButton) findViewById(R.id.forwardBtn);
         progress = (ProgressBar) findViewById(R.id.progress);
@@ -65,6 +72,19 @@ public class SiteActivity extends Activity {
         cookies.setAcceptThirdPartyCookies(web, true);
 
         web.setBackgroundColor(0xFF000000);
+        if (tv) {
+            web.setFocusable(true);
+            web.setFocusableInTouchMode(true);
+            web.setOnKeyListener(new View.OnKeyListener() {
+                @Override
+                public boolean onKey(View v, int keyCode, KeyEvent event) {
+                    String key = Tv.keyFor(keyCode);
+                    if (key == null) return false;
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) sendSiteKey(key);
+                    return true;
+                }
+            });
+        }
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String target) {
@@ -75,6 +95,10 @@ public class SiteActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String target) {
                 updateNav();
+                if (tv) {
+                    view.requestFocus();
+                    installSiteDpad(view);
+                }
             }
         });
 
@@ -126,6 +150,56 @@ public class SiteActivity extends Activity {
 
         updateNav();
         if (url != null) web.loadUrl(url);
+        if (tv) web.requestFocus();
+    }
+
+    /**
+     * A site is an ordinary desktop web page, so its own focus ring and
+     * keyboard handling often cannot be reached with a TV remote. Install a
+     * small navigation layer after every page load; it moves focus between
+     * visible links/buttons, activates the highlighted item on OK/Enter, and
+     * scrolls when there is no focusable item in that direction.
+     */
+    private void installSiteDpad(WebView view) {
+        String script = siteDpadScript();
+        if (script.length() == 0) return;
+        view.evaluateJavascript(
+                "window.__anystreamSiteNativeKeys = true;\n" + script, null);
+    }
+
+    private String siteDpadScript() {
+        if (siteDpadScript != null) return siteDpadScript;
+        try (InputStream input = getAssets().open("site-dpad.js")) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            siteDpadScript = new String(output.toByteArray(), StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            siteDpadScript = "";
+        }
+        return siteDpadScript;
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (!tv || customView != null) return super.dispatchKeyEvent(event);
+        String key = Tv.keyFor(event.getKeyCode());
+        if (key == null) return super.dispatchKeyEvent(event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN) sendSiteKey(key);
+        return true;
+    }
+
+    private void sendSiteKey(String key) {
+        if (web == null) return;
+        web.evaluateJavascript(
+                "window.__anystreamSiteKey && window.__anystreamSiteKey('" + key + "')", null);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && tv && web != null) web.requestFocus();
     }
 
     private void updateNav() {
@@ -189,6 +263,7 @@ public class SiteActivity extends Activity {
         super.onResume();
         if (web != null) web.onResume();
         updateNav();
+        if (tv) web.requestFocus();
     }
 
     @Override

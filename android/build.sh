@@ -37,6 +37,7 @@ build_variant() {
   mkdir -p "$work/res" "$work/assets/www" "$work/classes" "$work/dex" "$work/gen"
 
   cp -r "$ANDROID/res/." "$work/res/"
+  cp "$ANDROID/assets/site-dpad.js" "$work/assets/site-dpad.js"
   node "$ANDROID/tools/inject.js" "$ROOT/index.html" "$work/assets/www/index.html" "$variant"
   powershell -NoProfile -ExecutionPolicy Bypass -File "$ANDROID/tools/make-art.ps1" \
     -Source "$ROOT/anystream-icon.png" -ResDir "$work/res"

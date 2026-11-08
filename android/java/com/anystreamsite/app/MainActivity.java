@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         web = (WebView) findViewById(R.id.library);
-        tv = isTv();
+        tv = Tv.isTv(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -48,6 +48,16 @@ public class MainActivity extends Activity {
         web.setHorizontalScrollBarEnabled(false);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setBackgroundColor(0xFF000000);
+        web.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                if (!tv) return false;
+                String key = Tv.keyFor(keyCode);
+                if (key == null) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN) sendTvKey(key);
+                return true;
+            }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -82,18 +92,8 @@ public class MainActivity extends Activity {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (!tv) return super.dispatchKeyEvent(event);
 
-        String key;
-        switch (event.getKeyCode()) {
-            case KeyEvent.KEYCODE_DPAD_UP: key = "up"; break;
-            case KeyEvent.KEYCODE_DPAD_DOWN: key = "down"; break;
-            case KeyEvent.KEYCODE_DPAD_LEFT: key = "left"; break;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: key = "right"; break;
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-            case KeyEvent.KEYCODE_ENTER:
-            case KeyEvent.KEYCODE_NUMPAD_ENTER:
-            case KeyEvent.KEYCODE_BUTTON_A: key = "select"; break;
-            default: return super.dispatchKeyEvent(event);
-        }
+        String key = Tv.keyFor(event.getKeyCode());
+        if (key == null) return super.dispatchKeyEvent(event);
 
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (!"select".equals(key) || event.getRepeatCount() == 0) sendTvKey(key);
@@ -140,10 +140,6 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {
             // Nothing to persist.
         }
-    }
-
-    private boolean isTv() {
-        return getPackageManager().hasSystemFeature("android.software.leanback");
     }
 
     /** Exposed to the page as window.AndroidShell. */
@@ -204,7 +200,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean isTv() {
-            return MainActivity.this.isTv();
+            return Tv.isTv(MainActivity.this);
         }
     }
 }
