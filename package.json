@@ -1,14 +1,51 @@
 {
   "name": "anystreamsite",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Your streaming sites in one window.",
+  "author": "matthewisley16-maker",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1"
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1",
+    "dist": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^45.2.3"
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.anystreamsite.app",
+    "productName": "anystreamsite",
+    "copyright": "anystreamsite",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "index.html",
+      "anystream.ico",
+      "anystream-icon.png",
+      "favicon.ico"
+    ],
+    "win": {
+      "icon": "anystream.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "shortcutName": "anystreamsite",
+      "artifactName": "anystreamsitev1.1-setup.${ext}"
+    }
   }
 }
