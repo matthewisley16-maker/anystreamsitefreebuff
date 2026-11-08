@@ -44,13 +44,21 @@ const shim = `
 const dpad = tv ? `
 <script>
 (function () {
+  var focusedEl = null;
   function shown(el) {
-    if (!el || el.offsetParent === null) return false;
+    if (!el || el.hidden) return false;
+    var style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden") return false;
     var r = el.getBoundingClientRect();
     return r.width > 1 && r.height > 1;
   }
   function cards() {
     return Array.prototype.slice.call(document.querySelectorAll(".card")).filter(shown);
+  }
+  function navTargets() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll(".card, #settingsBtn, #addBtn, #search")
+    ).filter(shown);
   }
   function openPanel() {
     var open = Array.prototype.slice.call(document.querySelectorAll(".backdrop")).filter(function (el) {
@@ -63,15 +71,34 @@ const dpad = tv ? `
       return !el.disabled && el.getAttribute("aria-disabled") !== "true" && shown(el);
     });
   }
-  function moveCard(dir) {
-    var list = cards();
-    if (!list.length) {
-      var fallback = document.querySelector(".library button, #addBtn, #settingsBtn");
-      if (fallback) { fallback.focus(); return true; }
-      return false;
+  function focusEl(el) {
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+    if (!el.classList) return;
+    if (focusedEl && focusedEl !== el) focusedEl.classList.remove("tv-focused");
+    focusedEl = el;
+    el.classList.add("tv-focused");
+  }
+  function reveal(el) {
+    try { el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (err) {}
+  }
+  function focusFirst() {
+    var panel = openPanel();
+    if (panel) {
+      var items = panelItems(panel);
+      if (items.length) { focusEl(items[0]); reveal(items[0]); return true; }
     }
+    var first = cards()[0];
+    if (first) { focusEl(first); reveal(first); return true; }
+    var fallback = document.querySelector("#settingsBtn, #addBtn, #search");
+    if (fallback) { focusEl(fallback); return true; }
+    return false;
+  }
+  function moveCard(dir) {
+    var list = navTargets();
+    if (!list.length) return focusFirst();
     var current = document.activeElement;
-    if (list.indexOf(current) === -1) { list[0].focus(); return true; }
+    if (list.indexOf(current) === -1) return focusFirst();
     var r = current.getBoundingClientRect();
     var cx = r.left + r.width / 2;
     var cy = r.top + r.height / 2;
@@ -91,37 +118,102 @@ const dpad = tv ? `
       if (next < score) { score = next; best = el; }
     });
     if (!best) return false;
-    best.focus({ preventScroll: true });
-    best.scrollIntoView({ block: "nearest", inline: "nearest" });
+    focusEl(best);
+    reveal(best);
     return true;
   }
   function movePanel(panel, dir) {
     var items = panelItems(panel);
     if (!items.length) return false;
     var index = items.indexOf(document.activeElement);
-    if (index === -1) { items[0].focus(); return true; }
+    if (index === -1) { focusEl(items[0]); reveal(items[0]); return true; }
     var step = dir === "down" || dir === "right" ? 1 : -1;
     var next = Math.min(items.length - 1, Math.max(0, index + step));
     if (next === index) return false;
-    items[next].focus();
+    focusEl(items[next]);
+    reveal(items[next]);
     return true;
   }
-  document.addEventListener("keydown", function (event) {
-    var dir = event.key === "ArrowLeft" ? "left"
-      : event.key === "ArrowRight" ? "right"
-      : event.key === "ArrowDown" ? "down"
-      : event.key === "ArrowUp" ? "up" : null;
-    if (!dir) return;
-    var el = document.activeElement;
-    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
+  function activate() {
     var panel = openPanel();
-    if (panel ? movePanel(panel, dir) : moveCard(dir)) event.preventDefault();
+    var el = document.activeElement;
+    if (panel) {
+      var items = panelItems(panel);
+      if (items.indexOf(el) === -1) {
+        if (items.length) { focusEl(items[0]); reveal(items[0]); return true; }
+        return false;
+      }
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+        focusEl(el);
+        if (el.type === "checkbox" || el.type === "radio") el.click();
+        else if (window.AndroidShell && AndroidShell.showKeyboard) {
+          try { AndroidShell.showKeyboard(); } catch (err) {}
+        }
+        return true;
+      }
+      el.click();
+      var opened = openPanel();
+      if (opened && el.tagName !== "SELECT") {
+        var controls = panelItems(opened);
+        if (controls.length && controls.indexOf(document.activeElement) === -1) {
+          focusEl(controls[0]);
+          reveal(controls[0]);
+        }
+      }
+      return true;
+    }
+    if (!el) return focusFirst();
+    if (el.classList && el.classList.contains("card")) { el.click(); return true; }
+    if (el.tagName === "BUTTON" || el.tagName === "A" || el.tagName === "INPUT" || el.getAttribute("role") === "button") {
+      el.click();
+      var nextPanel = openPanel();
+      if (nextPanel && el.tagName !== "SELECT") {
+        var nextControls = panelItems(nextPanel);
+        if (nextControls.length && nextControls.indexOf(document.activeElement) === -1) {
+          var nextTarget = nextControls[0];
+          setTimeout(function () {
+            if (openPanel() === nextPanel) { focusEl(nextTarget); reveal(nextTarget); }
+          }, 0);
+        }
+      }
+      return true;
+    }
+    return focusFirst();
+  }
+  function handleKey(key) {
+    if (key === "select") return activate();
+    if (key !== "left" && key !== "right" && key !== "up" && key !== "down") return false;
+    var panel = openPanel();
+    return panel ? movePanel(panel, key) : moveCard(key);
+  }
+  window.__anystreamTvKey = handleKey;
+  window.__anystreamTvFocus = focusFirst;
+  document.addEventListener("focusin", function (event) {
+    var el = event.target;
+    if (!el || !el.classList || el === focusedEl || el === document.body) return;
+    if (focusedEl) focusedEl.classList.remove("tv-focused");
+    focusedEl = el;
+    el.classList.add("tv-focused");
+  }, true);
+  document.addEventListener("keydown", function (event) {
+    // Native mode sends keys through __anystreamTvKey; this listener is the
+    // fallback for browsers and emulators that deliver keys to the DOM.
+    if (window.__anystreamNativeKeys) return;
+    var code = event.keyCode;
+    var key = event.key === "ArrowLeft" || code === 37 ? "left"
+      : event.key === "ArrowRight" || code === 39 ? "right"
+      : event.key === "ArrowDown" || code === 40 ? "down"
+      : event.key === "ArrowUp" || code === 38 ? "up"
+      : event.key === "Enter" || event.key === " " || code === 13 || code === 23 || code === 66 ? "select" : null;
+    if (!key) return;
+    if (handleKey(key)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }, true);
   window.addEventListener("load", function () {
     setTimeout(function () {
-      if (openPanel()) return;
-      var first = document.querySelector(".card");
-      if (first) first.focus({ preventScroll: true });
+      if (window.__anystreamTvFocus) window.__anystreamTvFocus();
     }, 2800);
   });
 })();
@@ -212,6 +304,17 @@ const css = tv ? `
   .card:focus, .card:focus-visible {
     outline: 4px solid var(--accent);
     outline-offset: 3px;
+    transform: none;
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+  }
+  /* Programmatic focus from a TV remote does not always match :focus-visible,
+     so the selected element also gets an explicit class. */
+  .tv-focused {
+    outline: 3px solid var(--accent) !important;
+    outline-offset: 3px !important;
+  }
+  .card.tv-focused {
+    outline-width: 4px !important;
     transform: none;
     box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
   }

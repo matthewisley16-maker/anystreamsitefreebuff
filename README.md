@@ -31,7 +31,7 @@ The Windows file name carries the version, the platform and the architecture, so
 - **Launch animations**, switchable in Settings
 - **Search** your library from the top bar
 - **Storage controls** — clear cached pages, or clear cookies to sign out of every site
-- **Remote friendly on TV** — D-pad navigation, a visible focus ring and extra large tiles
+- **Remote friendly on TV** — native D-pad handling, a visible focus ring and extra large tiles; **OK** selects the highlighted tile or button
 
 ## Windows 10 / 11 (64-bit)
 
@@ -58,8 +58,9 @@ The Windows file name carries the version, the platform and the architecture, so
    ```
 
 2. anystreamsite appears in the TV launcher after installing.
-3. Move around with the D-pad: left, right, up and down jump between tiles, and **OK** opens the highlighted site.
-4. Inside a site, **Back** closes it and returns to the library.
+3. Move around with the D-pad: left, right, up and down jump between tiles, and **OK** opens the highlighted site. Up from the tiles reaches the top bar, where you can select Settings or Add site.
+4. If you already have the earlier v1.1 TV build, install this APK over it. Its versionCode is 12, so Android accepts it as an update without uninstalling first.
+5. Inside a site, **Back** closes it and returns to the library.
 
 The TV build uses a compact 10-foot layout that scales from 720p through 4K, with larger tiles, focus outlines and no heavy blur effects, so it stays readable and smooth on low-power boxes. Links inside a site stay in the same view, and **Back** walks the site's history before returning to the library.
 
@@ -115,7 +116,7 @@ You need:
 bash android/build.sh
 ```
 
-APKs are written to `dist/android/` and signed with the keystore referenced by the build script. The phone and TV builds differ only in manifest, layout and the injected CSS overrides.
+APKs are written to `dist/android/` and signed with the keystore referenced by the build script. The phone and TV builds differ in manifest, layout, and the injected TV remote/focus and CSS layer.
 
 ## Known limitations
 
@@ -126,4 +127,4 @@ APKs are written to `dist/android/` and signed with the keystore referenced by t
 
 ## Version
 
-Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, and gives Android TV a native 10-foot layout.
+Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, gives Android TV a native 10-foot layout, and fixes TV remote input with a native D-pad bridge, visible focus rings and OK/Enter selection.
