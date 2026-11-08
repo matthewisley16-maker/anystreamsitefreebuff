@@ -11,10 +11,10 @@ Grab the latest build from the [releases page](https://github.com/matthewisley16
 | Build | File | For |
 | --- | --- | --- |
 | Windows | `anystreamsitev1.1-windows-x64-setup.exe` | Windows 10 and 11, 64-bit |
-| Android phone / tablet | `anystreamsitev1.1-phone.apk` | Android 6.0 and newer |
-| Android TV | `anystreamsitev1.1-android-tv.apk` | Android TV 6.0 and newer |
+| Android phone / tablet | `anystreamsitev1.1-phone-v13.apk` | Android 6.0 and newer |
+| Android TV | `anystreamsitev1.1-android-tv-v13.apk` | Android TV 6.0 and newer |
 
-The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have.
+The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have. The APK names include the Android versionCode (13), which distinguishes this rebuilt package from the earlier v1.1 APKs.
 
 ## Features
 
@@ -43,7 +43,7 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android phone / tablet
 
-1. Copy `anystreamsitev1.1-phone.apk` to the device, or download it directly in the browser.
+1. Copy `anystreamsitev1.1-phone-v13.apk` to the device, or download it directly in the browser.
 2. Open the file and allow installs from unknown sources when Android asks.
 3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build. If Android blocks the install, tap **More details**, then **Install anyway**; the manifest targets Android 14, so the "made for an older version" warning no longer applies.
 4. Open the app, paste a site URL and add it. Two tiles sit per row on a normal handset.
@@ -51,10 +51,10 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android TV
 
-1. Install `anystreamsitev1.1-android-tv.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
+1. Install `anystreamsitev1.1-android-tv-v13.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
 
    ```bash
-   adb install anystreamsitev1.1-android-tv.apk
+   adb install anystreamsitev1.1-android-tv-v13.apk
    ```
 
 2. anystreamsite appears in the TV launcher after installing.
