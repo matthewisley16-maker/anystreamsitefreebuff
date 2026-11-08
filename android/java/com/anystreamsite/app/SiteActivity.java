@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -41,6 +43,17 @@ public class SiteActivity extends Activity {
     private boolean tv;
     private String siteNavMode;
     private String siteDpadScript;
+    private final Handler keyHandler = new Handler(Looper.getMainLooper());
+    private boolean selectLongPressFired;
+    private final Runnable selectLongPressRunnable = new Runnable() {
+        @Override public void run() {
+            selectLongPressFired = true;
+            if (web != null) {
+                web.evaluateJavascript(
+                        "window.__anystreamSiteToggleScroll && window.__anystreamSiteToggleScroll()", null);
+            }
+        }
+    };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -74,12 +87,14 @@ public class SiteActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        if (tv && "pointer".equals(siteNavMode)) {
-            // The pointer is the navigation device in this mode; an overlaid
-            // scrollbar must not steal its clicks or obscure its movement.
+        if (tv) {
+            // The site scrollbar must not steal clicks in either navigation
+            // mode; the page still scrolls via the controller or content.
             web.setVerticalScrollBarEnabled(false);
             web.setHorizontalScrollBarEnabled(false);
             web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        }
+        if (tv && "pointer".equals(siteNavMode)) {
             web.addJavascriptInterface(new PointerBridge(), "__anystreamPointerBridge");
         }
 
@@ -237,6 +252,22 @@ public class SiteActivity extends Activity {
         if (!tv || customView != null) return super.dispatchKeyEvent(event);
         String key = Tv.keyFor(event.getKeyCode());
         if (key == null) return super.dispatchKeyEvent(event);
+        if ("select".equals(key)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) {
+                    selectLongPressFired = false;
+                    keyHandler.removeCallbacks(selectLongPressRunnable);
+                    keyHandler.postDelayed(selectLongPressRunnable, 3000);
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                keyHandler.removeCallbacks(selectLongPressRunnable);
+                if (!selectLongPressFired) sendSiteKey("select");
+                selectLongPressFired = false;
+                return true;
+            }
+        }
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             // Dropping into the page gets the site toolbar out of the way;
             // moving back up brings it back for Back/Reload/Exit.
@@ -312,6 +343,7 @@ public class SiteActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        keyHandler.removeCallbacks(selectLongPressRunnable);
         if (web != null) web.onPause();
         try {
             CookieManager.getInstance().flush();
@@ -330,6 +362,7 @@ public class SiteActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        keyHandler.removeCallbacks(selectLongPressRunnable);
         if (web != null) {
             stage.removeAllViews();
             web.destroy();

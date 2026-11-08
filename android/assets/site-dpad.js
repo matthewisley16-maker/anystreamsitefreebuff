@@ -6,8 +6,10 @@
   var focused = null;
   var saved = null;
   var pointer = { x: 0, y: 0, overlay: null };
-  var lastPointerScrollAt = 0;
-  var SELECTOR = "a[href], area[href], button, input, select, textarea, summary, " +
+  var lastFocusScrollAt = 0;
+  var scrollMode = false;
+  var scrollBadge = null;
+  var SELECTOR = "a, area[href], button, input, select, textarea, summary, " +
     "[contenteditable='true'], [tabindex]:not([tabindex='-1']), " +
     "[role='button'], [role='link'], [role='menuitem'], [role='tab'], " +
     "[role='checkbox'], [role='option'], [onclick]";
@@ -75,20 +77,20 @@
   }
 
   function scroll(dir) {
+    // The side scroller must never move the page. Only vertical scrolling is
+    // allowed when focus has nowhere to go, and it is throttled.
+    if (dir !== "up" && dir !== "down") return false;
+    var now = Date.now();
+    if (now - lastFocusScrollAt < 160) return false;
+    lastFocusScrollAt = now;
     var x = window.scrollX || window.pageXOffset || 0;
     var y = window.scrollY || window.pageYOffset || 0;
-    var stepY = Math.max(160, Math.round(window.innerHeight * 0.55));
-    var stepX = Math.max(160, Math.round(window.innerWidth * 0.55));
-    var dx = 0;
-    var dy = 0;
-    if (dir === "up") dy = -stepY;
-    else if (dir === "down") dy = stepY;
-    else if (dir === "left") dx = -stepX;
-    else dx = stepX;
+    var stepY = Math.max(120, Math.round(window.innerHeight * 0.35));
+    var dy = dir === "up" ? -stepY : stepY;
     try {
-      window.scrollTo({ left: x + dx, top: y + dy, behavior: "auto" });
+      window.scrollTo({ left: x, top: y + dy, behavior: "auto" });
     } catch (err) {
-      window.scrollBy(dx, dy);
+      window.scrollBy(0, dy);
     }
     return true;
   }
@@ -139,7 +141,7 @@
       }
     });
 
-    if (!best) return scroll(dir);
+    if (!best) return false;
     return focusEl(best);
   }
 
@@ -215,10 +217,17 @@
     if (existing) return;
     var style = document.createElement("style");
     style.id = id;
-    style.textContent = "html,body{scrollbar-width:none!important;}" +
-      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;}" +
-      "*{-webkit-tap-highlight-color:transparent!important;}" +
+    style.textContent = "*{-webkit-tap-highlight-color:transparent!important;}" +
       ":focus,:focus-visible{outline:none!important;}";
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function hideSiteScrollbars() {
+    if (document.getElementById("__anystream_hidden_scrollbars")) return;
+    var style = document.createElement("style");
+    style.id = "__anystream_hidden_scrollbars";
+    style.textContent = "*{scrollbar-width:none!important;}" +
+      "*::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;}";
     (document.head || document.documentElement).appendChild(style);
   }
 
@@ -228,25 +237,6 @@
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
     pointer.overlay.style.left = pointer.x + "px";
     pointer.overlay.style.top = pointer.y + "px";
-  }
-
-  function scrollPointer(dir) {
-    // Pointer movement is independent of the page scroller. Only a deliberate
-    // press while the dot is already at the top or bottom edge scrolls, and
-    // only vertically; the side scroller never moves the page.
-    if (dir !== "up" && dir !== "down") return;
-    var atEdge = dir === "up" ? pointer.y <= 3 : pointer.y >= window.innerHeight - 4;
-    if (!atEdge) return;
-    var now = Date.now();
-    if (now - lastPointerScrollAt < 250) return;
-    lastPointerScrollAt = now;
-    var step = 32;
-    var y = window.scrollY || window.pageYOffset || 0;
-    try {
-      window.scrollTo({ left: window.scrollX || window.pageXOffset || 0, top: y + (dir === "up" ? -step : step), behavior: "auto" });
-    } catch (err) {
-      window.scrollBy(0, dir === "up" ? -step : step);
-    }
   }
 
   function movePointer(dir) {
@@ -260,21 +250,55 @@
 
     pointer.x = Math.max(1, Math.min(window.innerWidth - 2, pointer.x));
     pointer.y = Math.max(1, Math.min(window.innerHeight - 2, pointer.y));
-    scrollPointer(dir);
     drawPointer();
     return true;
   }
 
+  function scrollPage(dir) {
+    if (dir !== "up" && dir !== "down") return true;
+    var now = Date.now();
+    if (now - lastFocusScrollAt < 100) return true;
+    lastFocusScrollAt = now;
+    var y = window.scrollY || window.pageYOffset || 0;
+    var step = Math.max(80, Math.round(window.innerHeight * 0.18));
+    try {
+      window.scrollTo({ left: window.scrollX || window.pageXOffset || 0, top: y + (dir === "up" ? -step : step), behavior: "auto" });
+    } catch (err) {
+      window.scrollBy(0, dir === "up" ? -step : step);
+    }
+    return true;
+  }
+
+  function showScrollBadge() {
+    if (!scrollBadge) {
+      scrollBadge = document.createElement("div");
+      scrollBadge.id = "__anystream_scroll_mode";
+      scrollBadge.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);" +
+        "z-index:2147483647;pointer-events:none;color:#fff;background:transparent;" +
+        "font:600 13px sans-serif;text-shadow:0 1px 3px #000,0 0 8px #000;";
+      scrollBadge.textContent = "SCROLL MODE - hold OK 3s to exit";
+      document.documentElement.appendChild(scrollBadge);
+    }
+    scrollBadge.style.display = "block";
+  }
+
+  function toggleScrollMode() {
+    scrollMode = !scrollMode;
+    if (scrollMode) {
+      hidePointer();
+      showScrollBadge();
+    } else {
+      if (scrollBadge) scrollBadge.style.display = "none";
+      if (MODE === "pointer") {
+        ensurePointer();
+        drawPointer();
+      }
+    }
+    return scrollMode;
+  }
+
   function clickPointer() {
     ensurePointer();
-    // Android's native WebView tap handles links inside cross-origin frames
-    // and links covered by transparent layout layers, which a DOM click cannot.
-    if (window.__anystreamPointerBridge && typeof window.__anystreamPointerBridge.clickAt === "function") {
-      try {
-        window.__anystreamPointerBridge.clickAt(pointer.x / window.innerWidth, pointer.y / window.innerHeight);
-        return true;
-      } catch (err) {}
-    }
     var stack = [];
     try {
       stack = document.elementsFromPoint ? document.elementsFromPoint(pointer.x, pointer.y) : [document.elementFromPoint(pointer.x, pointer.y)];
@@ -283,12 +307,24 @@
     }
     var exact = stack.length ? stack[0] : null;
     if (!exact || exact === pointer.overlay) return false;
-    var hit = exact;
+    var hit = null;
     for (var i = 0; i < stack.length; i++) {
       var candidate = stack[i];
       if (!candidate || candidate === pointer.overlay) continue;
       var action = candidate.closest ? candidate.closest(SELECTOR) : null;
       if (action) { hit = action; break; }
+    }
+    // Prefer the actual DOM control. A native tap can hit a card/overlay first
+    // and never reach the hyperlink inside it; native remains the fallback for
+    // frames, shadow roots and controls the DOM cannot expose.
+    if (!hit) {
+      if (window.__anystreamPointerBridge && typeof window.__anystreamPointerBridge.clickAt === "function") {
+        try {
+          window.__anystreamPointerBridge.clickAt(pointer.x / window.innerWidth, pointer.y / window.innerHeight);
+          return true;
+        } catch (err) {}
+      }
+      hit = exact;
     }
     var needsKeyboard = /^(INPUT|TEXTAREA|SELECT)$/.test(hit.tagName) || hit.isContentEditable;
     return activateElement(hit, exact, needsKeyboard, pointer.x, pointer.y);
@@ -312,6 +348,10 @@
   }
 
   function handle(key) {
+    if (scrollMode) {
+      if (key === "up" || key === "down") return scrollPage(key);
+      return true;
+    }
     if (key === "select") return MODE === "pointer" ? clickPointer() : selectFocus();
     if (key === "up" || key === "down" || key === "left" || key === "right") {
       return MODE === "pointer" ? movePointer(key) : moveFocus(key);
@@ -330,6 +370,7 @@
     return list.length ? focusEl(list[0]) : false;
   };
   window.__anystreamSiteSetMode = setMode;
+  window.__anystreamSiteToggleScroll = toggleScrollMode;
 
   document.addEventListener("keydown", function (event) {
     // The Android shell sets this flag and calls __anystreamSiteKey directly.
@@ -349,6 +390,7 @@
   }, true);
 
   function installMode() {
+    hideSiteScrollbars();
     if (MODE === "pointer") {
       ensurePointer();
       drawPointer();
