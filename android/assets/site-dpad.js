@@ -14,6 +14,7 @@
   var focusCache = null;
   var focusCacheAt = 0;
   var boundClicks = typeof WeakSet === "function" ? new WeakSet() : null;
+  var clickRoots = typeof WeakSet === "function" ? new WeakSet() : null;
   var SELECTOR = "a, area[href], button, input, select, textarea, summary, " +
     "[contenteditable='true'], [tabindex]:not([tabindex='-1']), " +
     "[role='button'], [role='link'], [role='menuitem'], [role='tab'], " +
@@ -22,7 +23,7 @@
     "[onmousedown], [onpointerdown], [ontouchend], [aria-haspopup], " +
     "[aria-expanded], [data-href], [data-url], [data-link], [data-action], " +
     "[data-click], [data-toggle], [data-bs-toggle], [jsaction]";
-  var HINT_RE = /(^|[\s_-])(poster|card|tile|movie|show|episode|channel|thumbnail|thumb|cover|artwork|icon|logo|button|btn|menu-item|nav-item|dropdown|toggle|option|select|choice|play|watch|source|server|quality|season|genre|pagination|page-item|page-link|next|prev|close|remove|clickable)([\s_-]|$)/i;
+  var HINT_RE = /(^|[\s_-])(poster|card|tile|movie|show|episode|channel|thumbnail|thumb|cover|artwork|icon|logo|button|btn|menu-item|nav-item|dropdown|toggle|option|select|choice|play|watch|source|server|quality|season|genre|pagination|page-item|page-link|next|prev|close|remove|clickable|result|search|entry|media|video|link|showcase)([\s_-]|$)/i;
   var CONTAINER_RE = /(^|[\s_-])(list|grid|row|shelf|carousel|slider|container|wrapper|section|panel|collection|results|items)([\s_-]|$)/i;
   var REGION_SELECTOR = "aside, [role='dialog'], [role='menu'], " +
     "[class*='sidebar'], [id*='sidebar'], [class*='drawer'], [id*='drawer'], " +
@@ -55,6 +56,26 @@
       !!(el.getAttribute && el.getAttribute("role") === "img");
   }
 
+  function hasVisualContent(el) {
+    if (!el || !el.querySelector) return false;
+    try {
+      if (el.querySelector("img, picture, video, canvas, svg")) return true;
+      var style = window.getComputedStyle(el);
+      return !!(style && /url\(/i.test(style.backgroundImage || ""));
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // A visual control can be clickable even when its own box has
+  // pointer-events:none: the site may handle the click on an overlay or a
+  // shared results container. Do not silently drop those controls.
+  function isVisualAction(el) {
+    if (!el || !el.matches || !hasVisualContent(el)) return false;
+    return el.matches(SELECTOR) || hasHandlerProperty(el) ||
+      hasReactClick(el) || hasBoundClick(el) || hasJQueryClick(el);
+  }
+
   function markClickTarget(el) {
     if (!el) return;
     if (boundClicks) boundClicks.add(el);
@@ -79,9 +100,15 @@
     if (typeof original !== "function") return;
     proto.addEventListener = function (type, listener, options) {
       try {
-        if (this && this.nodeType === 1 &&
-            /^(click|dblclick|mousedown|mouseup|pointerdown|pointerup|touchstart|touchend)$/i.test(String(type))) {
-          markClickTarget(this);
+        if (/^(click|dblclick|mousedown|mouseup|pointerdown|pointerup|touchstart|touchend)$/i.test(String(type))) {
+          if (this && this.nodeType === 1) markClickTarget(this);
+          // A listener on a results list or on the document is often the
+          // site's delegated click handler for cards that have no handler of
+          // their own. Remember those roots for delegated-card detection.
+          if (clickRoots && (this === document || this === document.body ||
+              this === document.documentElement || (this && this.nodeType === 1))) {
+            clickRoots.add(this);
+          }
           invalidateFocusables();
         }
       } catch (err) {}
@@ -218,9 +245,11 @@
   }
 
   function activeRegion() {
-    var region = containingRegion(focused);
+    // Prefer the element the site actually focused. Our ring can be stale
+    // after the user submits a search or the page swaps in new results.
+    var region = containingRegion(document.activeElement);
     if (region) return region;
-    return containingRegion(document.activeElement);
+    return containingRegion(focused);
   }
 
   function cancelRegionFocus() {
@@ -272,7 +301,7 @@
     var clean = [];
     for (var i = 0; i < out.length; i++) {
       if (out.indexOf(out[i]) !== i) continue;
-      if (visible(out[i], isMediaElement(out[i]))) clean.push(out[i]);
+      if (visible(out[i], isMediaElement(out[i]) || hasVisualContent(out[i]))) clean.push(out[i]);
     }
     focusCache = clean;
     focusCacheAt = now;
@@ -297,7 +326,7 @@
   }
 
   function hintAction(el) {
-    if (!el || !el.getAttribute || !visible(el)) return false;
+    if (!el || !el.getAttribute || !visible(el, hasVisualContent(el))) return false;
     var marker = classText(el);
     if (!HINT_RE.test(marker) || CONTAINER_RE.test(marker)) return false;
     var r = rectOf(el);
@@ -305,7 +334,138 @@
     if (r.width > window.innerWidth * 0.95 && r.height > window.innerHeight * 0.55) return false;
     try {
       if (el.querySelectorAll(SELECTOR).length) return false;
-      return el.children.length <= 2;
+      return el.children.length <= 6;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // Cards in search results are frequently plain rows with a thumbnail and
+  // text, while the real click listener lives on the surrounding results list.
+  // Detect those compact delegated cards even when they have no class hint.
+  function hasDelegatedRoot(el) {
+    if (!clickRoots || !el) return null;
+    var p = el.parentElement;
+    while (p) {
+      if (clickRoots.has(p)) return p;
+      p = p.parentElement;
+    }
+    if (clickRoots.has(document.body)) return document.body;
+    if (clickRoots.has(document)) return document;
+    return null;
+  }
+
+  function searchContext(el) {
+    var p = el, depth = 0;
+    while (p && p !== document.documentElement && depth < 10) {
+      var role = p.getAttribute ? p.getAttribute("role") : "";
+      if (role === "listbox" || role === "grid" || role === "list" || role === "tablist") return true;
+      var marker = classText(p);
+      if (/(^|[\s_-])(search|result|grid|list|shelf|carousel|collection|browse|discover|gallery)([\s_-]|$)/i.test(marker)) return true;
+      p = p.parentElement;
+      depth++;
+    }
+    return false;
+  }
+
+  function delegatedShape(el) {
+    if (!el || !el.matches || !el.getAttribute) return false;
+    if (isMediaElement(el) || el.matches(SELECTOR)) return false;
+    if (!/^(div|li|article|section|figure|span|p)$/i.test(el.tagName)) return false;
+    if (CONTAINER_RE.test(classText(el))) return false;
+    if (!visible(el, true)) return false;
+    var r = rectOf(el);
+    if (r.width < 24 || r.height < 20) return false;
+    if (r.width > window.innerWidth * 0.95 && r.height > window.innerHeight * 0.55) return false;
+    var text = "";
+    try { text = (el.textContent || "").replace(/\s+/g, " ").trim(); } catch (err) {}
+    if (!text) return false;
+    var images = 0;
+    try {
+      images = el.querySelectorAll("img, picture, video, canvas").length;
+      if (el.querySelectorAll(SELECTOR).length) return false;
+      if (el.children.length > 4) return false;
+    } catch (err) {
+      return false;
+    }
+    if (images > 2) return false;
+    if (images === 2 && !/(^|[\s_-])(card|poster|tile|movie|show|episode|channel|result|entry|media|video)([\s_-]|$)/i.test(classText(el))) return false;
+    if (images > 0) return true;
+    var visual = false;
+    try {
+      var style = window.getComputedStyle(el);
+      visual = !!(style && /url\(/i.test(style.backgroundImage || ""));
+      if (!visual) visual = !!el.querySelector("svg, i, [class*='icon'], [class*='poster'], [class*='thumb']");
+    } catch (err) {
+      visual = false;
+    }
+    return visual;
+  }
+
+  function strictResultContext(el) {
+    var p = el, depth = 0;
+    while (p && p !== document.documentElement && depth < 10) {
+      var role = p.getAttribute ? p.getAttribute("role") : "";
+      if (role === "listbox" || role === "grid") return true;
+      var marker = classText(p);
+      if (/(^|[\s_-])(search|results?|browse|discover|gallery)([\s_-]|$)/i.test(marker)) return true;
+      p = p.parentElement;
+      depth++;
+    }
+    return false;
+  }
+
+  // Even when a site attached its delegated listener before this script was
+  // injected, a compact card inside a search/results container is a useful
+  // D-pad target. Prefer the outer card over its image or title child.
+  function isResultCard(el) {
+    if (!delegatedShape(el) || !strictResultContext(el)) return false;
+    var p = el.parentElement, depth = 0;
+    while (p && depth < 4) {
+      if (delegatedShape(p)) return false;
+      p = p.parentElement;
+      depth++;
+    }
+    return true;
+  }
+
+  function isDelegatedItem(el) {
+    if (!delegatedShape(el)) return false;
+    var root = hasDelegatedRoot(el);
+    if (!root) return false;
+    if ((root === document || root === document.body) && !searchContext(el)) return false;
+    var p = el.parentElement, depth = 0;
+    while (p && depth < 4) {
+      if (delegatedShape(p)) return false;
+      p = p.parentElement;
+      depth++;
+    }
+    return true;
+  }
+
+  // A listener on a results list is a delegated handler, not a single button.
+  // Never turn the list itself into one giant focus target: its child cards
+  // must stay individually selectable.
+  function isDirectClickTarget(el) {
+    if (!el || !el.matches) return false;
+    if (CONTAINER_RE.test(classText(el))) return false;
+    if (/^(UL|OL|NAV|ASIDE|MAIN|SECTION|FORM)$/i.test(el.tagName) && !hintAction(el)) return false;
+    try {
+      if (el.children.length > 4) return false;
+      if (el.querySelectorAll("img, picture, video, canvas").length > 1) return false;
+      if (el.querySelectorAll("a[href], button, [role='button'], [role='link'], [role='option']").length) return false;
+    } catch (err) {
+      return false;
+    }
+    return true;
+  }
+
+  function isLargeContainer(el) {
+    if (!el || !el.matches || !el.getAttribute) return false;
+    if (!CONTAINER_RE.test(classText(el))) return false;
+    try {
+      if (el.children.length > 3) return true;
+      return el.querySelectorAll("img, picture, video, canvas, svg").length > 1;
     } catch (err) {
       return false;
     }
@@ -318,10 +478,13 @@
       if (p.matches && (p.matches(SELECTOR) || tabLike(p))) return true;
       var rect = rectOf(p);
       var tooBig = rect.width > window.innerWidth * 0.95 && rect.height > window.innerHeight * 0.55;
-      if (!tooBig && (hintAction(p) || hasHandlerProperty(p) || hasReactClick(p) ||
-          hasBoundClick(p) || hasJQueryClick(p))) return true;
+      var large = isLargeContainer(p);
+      if (!tooBig && (hintAction(p) || (!large && (hasHandlerProperty(p) ||
+          hasReactClick(p) || hasJQueryClick(p) ||
+          (hasBoundClick(p) && isDirectClickTarget(p)))) ||
+          isDelegatedItem(p) || isResultCard(p))) return true;
       try {
-        if (!tooBig && window.getComputedStyle(p).cursor === "pointer") return true;
+        if (!tooBig && !large && window.getComputedStyle(p).cursor === "pointer") return true;
       } catch (err) {}
       p = p.parentElement;
       depth++;
@@ -335,8 +498,11 @@
     var tag = el.tagName.toLowerCase();
     if (!/^(div|span|li|img|svg|picture|figure|section|article|p|strong|b|i|video|canvas)$/.test(tag)) return false;
     var media = isMediaElement(el);
-    if (!visible(el, media)) return false;
+    if (!visible(el, media || hasVisualContent(el))) return false;
     var tab = tabLike(el);
+    // A results grid or list often owns a delegated click listener. It must
+    // not become one giant stop that hides every card inside it.
+    if (!tab && isLargeContainer(el)) return false;
     var style = null;
     try { style = window.getComputedStyle(el); } catch (err) {}
     var pointer = !!style && style.cursor === "pointer";
@@ -350,9 +516,10 @@
     var custom = false;
     if (!media && !pointer && !tab && !background) {
       custom = hintAction(el) || hasHandlerProperty(el) || hasReactClick(el) ||
-        hasBoundClick(el) || hasJQueryClick(el);
+        (hasBoundClick(el) && isDirectClickTarget(el)) || hasJQueryClick(el);
     }
-    if (!tab && !pointer && !media && !background && !custom) return false;
+    var delegated = !media && !background && (isDelegatedItem(el) || isResultCard(el));
+    if (!tab && !pointer && !media && !background && !custom && !delegated) return false;
     var r = rectOf(el);
     var minimum = media || background ? 12 : 5;
     if (r.width < minimum || r.height < minimum) return false;
@@ -375,8 +542,12 @@
   function restore() {
     if (!saved) return;
     try {
-      saved.el.style.outline = saved.outline;
-      saved.el.style.outlineOffset = saved.offset;
+      var old = saved;
+      saved = null;
+      if (old.outline) old.el.style.setProperty("outline", old.outline, old.outlinePriority);
+      else old.el.style.removeProperty("outline");
+      if (old.offset) old.el.style.setProperty("outline-offset", old.offset, old.offsetPriority);
+      else old.el.style.removeProperty("outline-offset");
     } catch (err) { /* the element may have been removed */ }
     saved = null;
   }
@@ -386,13 +557,31 @@
     restore();
     focused = el;
     if (!el) return;
-    saved = { el: el, outline: el.style.outline, offset: el.style.outlineOffset };
-    el.style.outline = "3px solid #e50914";
-    el.style.outlineOffset = "3px";
+    saved = {
+      el: el,
+      outline: el.style.getPropertyValue("outline"),
+      outlinePriority: el.style.getPropertyPriority("outline"),
+      offset: el.style.getPropertyValue("outline-offset"),
+      offsetPriority: el.style.getPropertyPriority("outline-offset")
+    };
+    // Inline important wins over sites that declare focus{outline:none}
+    // with !important, so the selected result is always visible.
+    el.style.setProperty("outline", "3px solid #e50914", "important");
+    el.style.setProperty("outline-offset", "3px", "important");
   }
 
   function focusEl(el) {
     if (!el) return false;
+    try {
+      // A plain div/span/li poster card is not keyboard-focusable by default.
+      // Without this, the ring moves but document.activeElement stays on the
+      // search box, so selecting the movie opens the keyboard again.
+      var tag = (el.tagName || "").toUpperCase();
+      var native = (tag === "A" && el.hasAttribute("href")) ||
+        tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" ||
+        tag === "TEXTAREA" || tag === "SUMMARY" || tag === "IFRAME";
+      if (!native && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+    } catch (err) {}
     try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
     mark(el);
     try { el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" }); } catch (err) {}
@@ -418,14 +607,28 @@
     return true;
   }
 
+  function isSearchField(el) {
+    if (!el || !el.matches) return false;
+    if (el.matches("input[type='search'], [role='searchbox']")) return true;
+    if (!/^(INPUT|TEXTAREA)$/i.test(el.tagName) && !el.isContentEditable) return false;
+    var marker = classText(el) + " " + (el.getAttribute("placeholder") || "") +
+      " " + (el.getAttribute("aria-label") || "") + " " + (el.getAttribute("name") || "");
+    return /search|query|find/i.test(marker);
+  }
+
   function moveFocus(dir) {
     var region = activeRegion();
+    // The site can focus its search box itself. Follow the box instead of a
+    // stale ring from before the search; otherwise a search dialog can trap
+    // the D-pad above results that are sitting outside the dialog's DOM.
+    if (region && isSearchField(document.activeElement)) region = null;
     var list = region ? regionFocusables(region) : focusables();
     if (!list.length) return scroll(dir);
 
     var current = null;
-    if (focused && list.indexOf(focused) !== -1) current = focused;
-    else if (list.indexOf(document.activeElement) !== -1) current = document.activeElement;
+    var active = document.activeElement;
+    if (active && active !== document.body && list.indexOf(active) !== -1) current = active;
+    else if (focused && list.indexOf(focused) !== -1) current = focused;
     if (!current) return focusEl(list[0]);
 
     var r = rectOf(current);
@@ -472,7 +675,9 @@
   function selectFocus() {
     var region = activeRegion();
     var list = region ? regionFocusables(region) : focusables();
-    var el = focused && list.indexOf(focused) !== -1 ? focused : document.activeElement;
+    var active = document.activeElement;
+    var el = active && list.indexOf(active) !== -1 ? active :
+      (focused && list.indexOf(focused) !== -1 ? focused : active);
     if (list.indexOf(el) === -1) {
       if (!list.length) return false;
       return focusEl(list[0]);
@@ -530,10 +735,15 @@
         typeof window.__anystreamPointerBridge.clickAt !== "function") return false;
     var r = rectOf(el);
     if (r.width < 2 || r.height < 2) return false;
+    var x = (r.left + r.width / 2) / window.innerWidth;
+    var y = (r.top + r.height / 2) / window.innerHeight;
     try {
-      window.__anystreamPointerBridge.clickAt(
-        (r.left + r.width / 2) / window.innerWidth,
-        (r.top + r.height / 2) / window.innerHeight);
+      // A pointer-events:none card, or a card covered by a sibling overlay,
+      // would send this tap to the list behind it. In that case let
+      // activateElement() dispatch the click on the card itself.
+      var hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight);
+      if (!hit || !(hit === el || el.contains(hit))) return false;
+      window.__anystreamPointerBridge.clickAt(x, y);
       return true;
     } catch (err) {
       return false;
@@ -751,6 +961,61 @@
       return MODE === "pointer" ? movePointer(key) : moveFocus(key);
     }
     return false;
+  }
+
+  function mutationRelevant(node) {
+    if (!node || node.nodeType !== 1) return false;
+    try {
+      if (node.matches && node.matches("a, button, input, select, textarea, img, picture, video, canvas, svg, li, article, [role], [class*='result'], [class*='search'], [class*='card'], [class*='poster']")) return true;
+      return !!(node.querySelector && node.querySelector("a, button, input, select, textarea, img, picture, video, canvas, svg, li, article, [role], [class*='result'], [class*='search'], [class*='card'], [class*='poster']"));
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // SPA search results are inserted after the first paint. Drop the cached
+  // focus list as soon as a result-like node appears, so the next Down press
+  // sees the new cards instead of the pre-search page.
+  function observeFocusChanges() {
+    if (!window.MutationObserver || !document.documentElement ||
+        window.__anystreamFocusObserver) return;
+    window.__anystreamFocusObserver = new MutationObserver(function (mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        var added = mutations[i].addedNodes || [];
+        var removed = mutations[i].removedNodes || [];
+        for (var j = 0; j < added.length; j++) {
+          if (mutationRelevant(added[j])) { invalidateFocusables(); return; }
+        }
+        for (var k = 0; k < removed.length; k++) {
+          if (mutationRelevant(removed[k])) { invalidateFocusables(); return; }
+        }
+      }
+    });
+    window.__anystreamFocusObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  document.addEventListener("input", invalidateFocusables, true);
+  document.addEventListener("change", invalidateFocusables, true);
+  // If the site moves focus itself (for example into its search field), move
+  // the visible ring with it. This keeps the D-pad's starting point and the
+  // highlighted control in sync.
+  document.addEventListener("focusin", function (event) {
+    if (MODE !== "dpad" || scrollMode) return;
+    var el = event.target;
+    if (!el || el === document.body || el === document.documentElement || el === focused) return;
+    try {
+      if (!visible(el)) return;
+      if (el.matches("input, select, textarea, [contenteditable='true']") ||
+          el.matches(SELECTOR) || isClickableNode(el)) mark(el);
+    } catch (err) {}
+  }, true);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", observeFocusChanges);
+  } else {
+    observeFocusChanges();
   }
 
   window.__anystreamSiteKey = handle;
