@@ -10,10 +10,35 @@
   var lastFocusScrollAt = 0;
   var scrollMode = false;
   var scrollBadge = null;
+  var regionFocusTimer = 0;
   var SELECTOR = "a, area[href], button, input, select, textarea, summary, " +
     "[contenteditable='true'], [tabindex]:not([tabindex='-1']), " +
     "[role='button'], [role='link'], [role='menuitem'], [role='tab'], " +
     "[role='checkbox'], [role='option'], [onclick]";
+  var REGION_SELECTOR = "aside, [role='dialog'], [role='menu'], " +
+    "[class*='sidebar'], [id*='sidebar'], [class*='drawer'], [id*='drawer'], " +
+    "[class*='side-menu'], [id*='side-menu'], [class*='sideMenu'], [id*='sideMenu'], " +
+    "[class*='sidenav'], [id*='sidenav']";
+  var SIDEBAR_SELECTOR = "aside, " +
+    "[class*='sidebar'], [id*='sidebar'], [class*='drawer'], [id*='drawer'], " +
+    "[class*='side-menu'], [id*='side-menu'], [class*='sideMenu'], [id*='sideMenu'], " +
+    "[class*='sidenav'], [id*='sidenav']";
+
+  // Anchors around poster images can have a zero-sized box (display:contents
+  // or an absolutely positioned image). Use the visible media box so the
+  // remote can still focus and activate them.
+  function rectOf(el) {
+    var r = el.getBoundingClientRect();
+    if (r.width > 2 && r.height > 2) return r;
+    if (el.querySelector) {
+      var media = el.querySelector("img, picture, video, canvas");
+      if (media) {
+        var m = media.getBoundingClientRect();
+        if (m.width > 2 && m.height > 2) return m;
+      }
+    }
+    return r;
+  }
 
   function visible(el) {
     if (!el || el.disabled || el.getAttribute("aria-disabled") === "true") return false;
@@ -21,8 +46,94 @@
     var style = window.getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden" ||
         style.opacity === "0" || style.pointerEvents === "none") return false;
-    var r = el.getBoundingClientRect();
+    var r = rectOf(el);
     return r.width > 2 && r.height > 2;
+  }
+
+  function regions() {
+    var nodes = [];
+    try { nodes = document.querySelectorAll(REGION_SELECTOR); } catch (err) { nodes = []; }
+    var out = [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (!visible(nodes[i])) continue;
+      var r = nodes[i].getBoundingClientRect();
+      if (r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) continue;
+      out.push(nodes[i]);
+    }
+    return out;
+  }
+
+  function sidebarRegions() {
+    var nodes = [];
+    try { nodes = document.querySelectorAll(SIDEBAR_SELECTOR); } catch (err) { nodes = []; }
+    var out = [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (!visible(nodes[i])) continue;
+      var r = nodes[i].getBoundingClientRect();
+      if (r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) continue;
+      out.push(nodes[i]);
+    }
+    return out;
+  }
+
+  function atPageTop() {
+    var y = window.scrollY || window.pageYOffset ||
+      (document.documentElement && document.documentElement.scrollTop) || 0;
+    return y <= 12;
+  }
+
+  // At the very top there is nothing above the first content row. Let Up
+  // hand focus to an open sidebar so the remote can reach its entries.
+  function focusTopSidebar() {
+    if (!atPageTop()) return false;
+    var currentRegion = activeRegion();
+    var sidebars = sidebarRegions();
+    for (var i = 0; i < sidebars.length; i++) {
+      if (sidebars[i] === currentRegion) continue;
+      var items = regionFocusables(sidebars[i]);
+      if (items.length) return focusEl(items[0]);
+    }
+    return false;
+  }
+
+  function containingRegion(el) {
+    var list = regions();
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (list.indexOf(el) !== -1) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function regionFocusables(region) {
+    if (!region) return [];
+    return focusables().filter(function (el) {
+      return region === el || region.contains(el);
+    });
+  }
+
+  function activeRegion() {
+    var region = containingRegion(focused);
+    if (region) return region;
+    return containingRegion(document.activeElement);
+  }
+
+  function cancelRegionFocus() {
+    if (regionFocusTimer) {
+      clearTimeout(regionFocusTimer);
+      regionFocusTimer = 0;
+    }
+  }
+
+  function scheduleRegionFocus(before) {
+    cancelRegionFocus();
+    regionFocusTimer = setTimeout(function () {
+      regionFocusTimer = 0;
+      var fresh = regions().filter(function (region) { return before.indexOf(region) === -1; });
+      if (!fresh.length) return;
+      var items = regionFocusables(fresh[fresh.length - 1]);
+      if (items.length) focusEl(items[0]);
+    }, 220);
   }
 
   // Include focusable elements inside open shadow roots; some TV sites use
@@ -97,7 +208,8 @@
   }
 
   function moveFocus(dir) {
-    var list = focusables();
+    var region = activeRegion();
+    var list = region ? regionFocusables(region) : focusables();
     if (!list.length) return scroll(dir);
 
     var current = null;
@@ -105,7 +217,7 @@
     else if (list.indexOf(document.activeElement) !== -1) current = document.activeElement;
     if (!current) return focusEl(list[0]);
 
-    var r = current.getBoundingClientRect();
+    var r = rectOf(current);
     var cx = r.left + r.width / 2;
     var cy = r.top + r.height / 2;
     var best = null;
@@ -113,7 +225,7 @@
 
     list.forEach(function (el) {
       if (el === current) return;
-      var q = el.getBoundingClientRect();
+      var q = rectOf(el);
       var dx = q.left + q.width / 2 - cx;
       var dy = q.top + q.height / 2 - cy;
       var main;
@@ -142,12 +254,13 @@
       }
     });
 
-    if (!best) return false;
+    if (!best) return dir === "up" ? focusTopSidebar() : false;
     return focusEl(best);
   }
 
   function selectFocus() {
-    var list = focusables();
+    var region = activeRegion();
+    var list = region ? regionFocusables(region) : focusables();
     var el = focused && list.indexOf(focused) !== -1 ? focused : document.activeElement;
     if (list.indexOf(el) === -1) {
       if (!list.length) return false;
@@ -159,7 +272,36 @@
       if (type === "checkbox" || type === "radio" || type === "button" || type === "submit") el.click();
       return true;
     }
-    return activateElement(el);
+    var before = regions();
+    // Poster links are often zero-sized wrappers or have their click handler
+    // on the image. A real tap at the media's visible centre works where a
+    // synthetic anchor click can be ignored.
+    if (!(isMediaAction(el) && nativeTap(el))) activateElement(el);
+    scheduleRegionFocus(before);
+    return true;
+  }
+
+  function isMediaAction(el) {
+    if (!el || !el.querySelector) return false;
+    var actionable = el.tagName === "A" || el.tagName === "BUTTON" ||
+      el.getAttribute("role") === "button" || el.getAttribute("role") === "link" ||
+      el.hasAttribute("onclick");
+    return !!actionable && !!el.querySelector("img, picture, video, canvas");
+  }
+
+  function nativeTap(el) {
+    if (!window.__anystreamPointerBridge ||
+        typeof window.__anystreamPointerBridge.clickAt !== "function") return false;
+    var r = rectOf(el);
+    if (r.width < 2 || r.height < 2) return false;
+    try {
+      window.__anystreamPointerBridge.clickAt(
+        (r.left + r.width / 2) / window.innerWidth,
+        (r.top + r.height / 2) / window.innerHeight);
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   function activateElement(target, eventTarget, shouldFocus, clickX, clickY) {
@@ -168,7 +310,7 @@
       try { target.focus({ preventScroll: true }); } catch (err) {}
     }
     var source = eventTarget || target;
-    var r = target.getBoundingClientRect();
+    var r = rectOf(target);
     var options = {
       bubbles: true,
       cancelable: true,
@@ -361,6 +503,7 @@
   }
 
   function handle(key) {
+    cancelRegionFocus();
     if (scrollMode) {
       if (key === "up" || key === "down") return scrollPage(key);
       return true;

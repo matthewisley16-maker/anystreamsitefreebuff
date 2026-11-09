@@ -94,7 +94,9 @@ public class SiteActivity extends Activity {
             web.setHorizontalScrollBarEnabled(false);
             web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
-        if (tv && "pointer".equals(siteNavMode)) {
+        // D-pad mode also needs real taps for poster/image links whose click
+        // handlers do not respond to a synthetic DOM click.
+        if (tv) {
             web.addJavascriptInterface(new PointerBridge(), "__anystreamPointerBridge");
         }
 
