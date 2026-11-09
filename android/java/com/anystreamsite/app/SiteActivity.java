@@ -12,6 +12,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -98,6 +99,7 @@ public class SiteActivity extends Activity {
         // handlers do not respond to a synthetic DOM click.
         if (tv) {
             web.addJavascriptInterface(new PointerBridge(), "__anystreamPointerBridge");
+            web.addJavascriptInterface(new KeyboardBridge(), "__anystreamKeyboardBridge");
         }
 
         // Same persistent cookie jar as the library, so sign-ins stick between
@@ -113,6 +115,9 @@ public class SiteActivity extends Activity {
             web.setOnKeyListener(new View.OnKeyListener() {
                 @Override
                 public boolean onKey(View v, int keyCode, KeyEvent event) {
+                    // While the IME is open the remote belongs to the keyboard,
+                    // not to the page focus controller.
+                    if (isKeyboardVisible()) return false;
                     String key = Tv.keyFor(keyCode);
                     if (key == null) return false;
                     if (event.getAction() == KeyEvent.ACTION_DOWN) sendSiteKey(key);
@@ -249,9 +254,43 @@ public class SiteActivity extends Activity {
         }
     }
 
+    /** Called by the site controller when an HTML input is opened with OK. */
+    private final class KeyboardBridge {
+        @JavascriptInterface
+        public void show() {
+            if (web == null) return;
+            web.postDelayed(new Runnable() {
+                @Override public void run() {
+                    if (web == null) return;
+                    InputMethodManager input =
+                            (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (input != null) {
+                        // The HTML input already has focus. Do not call
+                        // requestFocus here: it can blur the editor and close
+                        // the keyboard immediately.
+                        input.showSoftInput(web, InputMethodManager.SHOW_FORCED);
+                    }
+                }
+            }, 80);
+        }
+    }
+
+    private boolean isKeyboardVisible() {
+        try {
+            InputMethodManager input =
+                    (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            return input != null && input.isAcceptingText();
+        } catch (Throwable err) {
+            return false;
+        }
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (!tv || customView != null) return super.dispatchKeyEvent(event);
+        // The on-screen keyboard needs the D-pad and OK to choose letters.
+        // Let the IME consume them instead of driving the site controller.
+        if (isKeyboardVisible()) return super.dispatchKeyEvent(event);
         String key = Tv.keyFor(event.getKeyCode());
         if (key == null) return super.dispatchKeyEvent(event);
         if ("select".equals(key)) {
@@ -330,6 +369,14 @@ public class SiteActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (isKeyboardVisible()) {
+            InputMethodManager input =
+                    (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (input != null && web != null) {
+                input.hideSoftInputFromWindow(web.getWindowToken(), 0);
+            }
+            return;
+        }
         if (customView == null && web != null && web.canGoBack()) {
             web.goBack();
             updateNav();

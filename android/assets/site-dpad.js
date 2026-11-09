@@ -266,10 +266,22 @@
       if (!list.length) return false;
       return focusEl(list[0]);
     }
-    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) {
       focusEl(el);
       var type = (el.type || "").toLowerCase();
-      if (type === "checkbox" || type === "radio" || type === "button" || type === "submit") el.click();
+      if (type === "checkbox" || type === "radio" || type === "button" ||
+          type === "submit" || type === "reset") {
+        el.click();
+      } else if (type === "file" || type === "range" || type === "color") {
+        nativeTap(el);
+      } else {
+        showSiteKeyboard(el);
+      }
+      return true;
+    }
+    if (el.tagName === "SELECT") {
+      focusEl(el);
+      if (!nativeTap(el)) { try { el.click(); } catch (err) {} }
       return true;
     }
     var before = regions();
@@ -287,6 +299,19 @@
       el.getAttribute("role") === "button" || el.getAttribute("role") === "link" ||
       el.hasAttribute("onclick");
     return !!actionable && !!el.querySelector("img, picture, video, canvas");
+  }
+
+  function showSiteKeyboard(el) {
+    if (window.__anystreamKeyboardBridge &&
+        typeof window.__anystreamKeyboardBridge.show === "function") {
+      try {
+        window.__anystreamKeyboardBridge.show();
+        return true;
+      } catch (err) {}
+    }
+    // Browser fallback: a real tap on the field is the only way to ask a
+    // WebView for the IME without the native bridge.
+    return el ? nativeTap(el) : false;
   }
 
   function nativeTap(el) {
@@ -482,7 +507,9 @@
       hit = exact;
     }
     var needsKeyboard = /^(INPUT|TEXTAREA|SELECT)$/.test(hit.tagName) || hit.isContentEditable;
-    return activateElement(hit, exact, needsKeyboard, pointer.x, pointer.y);
+    activateElement(hit, exact, needsKeyboard, pointer.x, pointer.y);
+    if (needsKeyboard && hit.tagName !== "SELECT") showSiteKeyboard(hit);
+    return true;
   }
 
   function hidePointer() {
