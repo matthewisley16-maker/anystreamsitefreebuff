@@ -11,10 +11,10 @@ Grab the latest build from the [releases page](https://github.com/matthewisley16
 | Build | File | For |
 | --- | --- | --- |
 | Windows | `anystreamsitev1.1-windows-x64-setup.exe` | Windows 10 and 11, 64-bit |
-| Android phone / tablet | `anystreamsitev1.1-phone-v23.apk` | Android 6.0 and newer |
-| Android TV | `anystreamsitev1.1-android-tv-v23.apk` | Android TV 6.0 and newer |
+| Android phone / tablet | `anystreamsitev1.1-phone-v24.apk` | Android 6.0 and newer |
+| Android TV | `anystreamsitev1.1-android-tv-v24.apk` | Android TV 6.0 and newer |
 
-The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have. The APK names include the Android versionCode (23), which distinguishes this rebuilt package from the earlier v1.1 APKs.
+The Windows file name carries the version, the platform and the architecture, so you can tell at a glance which build you have. The APK names include the Android versionCode (24), which distinguishes this rebuilt package from the earlier v1.1 APKs.
 
 ## Features
 
@@ -44,7 +44,7 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android phone / tablet
 
-1. Copy `anystreamsitev1.1-phone-v23.apk` to the device, or download it directly in the browser.
+1. Copy `anystreamsitev1.1-phone-v24.apk` to the device, or download it directly in the browser.
 2. Open the file and allow installs from unknown sources when Android asks.
 3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build. If Android blocks the install, tap **More details**, then **Install anyway**; the manifest targets Android 14, so the "made for an older version" warning no longer applies.
 4. Open the app, paste a site URL and add it. Two tiles sit per row on a normal handset.
@@ -52,10 +52,10 @@ The Windows file name carries the version, the platform and the architecture, so
 
 ## Android TV
 
-1. Install `anystreamsitev1.1-android-tv-v23.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
+1. Install `anystreamsitev1.1-android-tv-v24.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
 
    ```bash
-   adb install anystreamsitev1.1-android-tv-v23.apk
+   adb install anystreamsitev1.1-android-tv-v24.apk
    ```
 
 2. anystreamsite appears in the TV launcher after installing.
@@ -131,4 +131,4 @@ APKs are written to `dist/android/` and signed with the keystore referenced by t
 
 ## Version
 
-Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, gives Android TV a native 10-foot layout, and fixes TV remote input with a native D-pad bridge, visible focus rings and OK/Enter selection. The TV APK is compile-time flagged as TV, so its native key handling cannot be skipped by a device feature check, and the controller tracks the highlighted element when Android drops DOM focus. Empty-library Add actions are focusable, the site-level controller makes the D-pad work inside opened sites, and the add form asks Android to keep the keyboard visible. The TV D-pad now stops on the hero URL field and its Add to library button instead of skipping straight to the tiles. Holding OK on a tile opens a long-press Edit/Remove menu, and Back closes dialogs, walks site history, and returns to the library without killing the task. Sites now also support a selectable D-pad mouse cursor for links that reject keyboard focus. v23 prioritizes the actual hyperlink under a card or overlay, adds slow vertical edge scrolling for the mouse dot, gives the TV add-site form a working category listbox, and keeps the site toolbar stable while the D-pad navigates. It also adds native taps for image and poster links that reject synthetic clicks, keeps D-pad focus inside an open drawer or sidebar, and lets Up at the top of the page reach an open sidebar. v23 opens Android's on-screen keyboard when a site input is selected, and gives the keyboard the D-pad while typing.
+Current release: **v1.1** — Windows x64, Android phone and Android TV. This build retimes the intro sound to the logo, targets Android 14 so installs are not blocked as an old app, gives Android TV a native 10-foot layout, and fixes TV remote input with a native D-pad bridge, visible focus rings and OK/Enter selection. The TV APK is compile-time flagged as TV, so its native key handling cannot be skipped by a device feature check, and the controller tracks the highlighted element when Android drops DOM focus. Empty-library Add actions are focusable, the site-level controller makes the D-pad work inside opened sites, and the add form asks Android to keep the keyboard visible. The TV D-pad now stops on the hero URL field and its Add to library button instead of skipping straight to the tiles. Holding OK on a tile opens a long-press Edit/Remove menu, and Back closes dialogs, walks site history, and returns to the library without killing the task. Sites now also support a selectable D-pad mouse cursor for links that reject keyboard focus. v24 prioritizes the actual hyperlink under a card or overlay, adds slow vertical edge scrolling for the mouse dot, gives the TV add-site form a working category listbox, and keeps the site toolbar stable while the D-pad navigates. It also adds native taps for image and poster links that reject synthetic clicks, keeps D-pad focus inside an open drawer or sidebar, and lets Up at the top of the page reach an open sidebar. v24 opens Android's on-screen keyboard when a site input is selected and gives the keyboard the D-pad while typing. It also makes plain poster images, background-image cards, pointer-style cards, SVG icons, tabs and top-bar dropdown arrows focusable and tappable with the remote, and recognizes React/JavaScript click handlers, data-href-style controls and click listeners added by the site.

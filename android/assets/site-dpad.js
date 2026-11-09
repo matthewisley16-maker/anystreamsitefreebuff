@@ -11,10 +11,19 @@
   var scrollMode = false;
   var scrollBadge = null;
   var regionFocusTimer = 0;
+  var focusCache = null;
+  var focusCacheAt = 0;
+  var boundClicks = typeof WeakSet === "function" ? new WeakSet() : null;
   var SELECTOR = "a, area[href], button, input, select, textarea, summary, " +
     "[contenteditable='true'], [tabindex]:not([tabindex='-1']), " +
     "[role='button'], [role='link'], [role='menuitem'], [role='tab'], " +
-    "[role='checkbox'], [role='option'], [onclick]";
+    "[role='checkbox'], [role='option'], [role='switch'], [role='treeitem'], " +
+    "[role='menuitemcheckbox'], [role='menuitemradio'], [onclick], " +
+    "[onmousedown], [onpointerdown], [ontouchend], [aria-haspopup], " +
+    "[aria-expanded], [data-href], [data-url], [data-link], [data-action], " +
+    "[data-click], [data-toggle], [data-bs-toggle], [jsaction]";
+  var HINT_RE = /(^|[\s_-])(poster|card|tile|movie|show|episode|channel|thumbnail|thumb|cover|artwork|icon|logo|button|btn|menu-item|nav-item|dropdown|toggle|option|select|choice|play|watch|source|server|quality|season|genre|pagination|page-item|page-link|next|prev|close|remove|clickable)([\s_-]|$)/i;
+  var CONTAINER_RE = /(^|[\s_-])(list|grid|row|shelf|carousel|slider|container|wrapper|section|panel|collection|results|items)([\s_-]|$)/i;
   var REGION_SELECTOR = "aside, [role='dialog'], [role='menu'], " +
     "[class*='sidebar'], [id*='sidebar'], [class*='drawer'], [id*='drawer'], " +
     "[class*='side-menu'], [id*='side-menu'], [class*='sideMenu'], [id*='sideMenu'], " +
@@ -40,12 +49,108 @@
     return r;
   }
 
-  function visible(el) {
+  function isMediaElement(el) {
+    if (!el || !el.tagName) return false;
+    return /^(img|svg|video|canvas)$/i.test(el.tagName) ||
+      !!(el.getAttribute && el.getAttribute("role") === "img");
+  }
+
+  function markClickTarget(el) {
+    if (!el) return;
+    if (boundClicks) boundClicks.add(el);
+    else {
+      try { el.__anystreamClickBound = true; } catch (err) {}
+    }
+  }
+
+  function hasBoundClick(el) {
+    if (!el) return false;
+    if (boundClicks) return boundClicks.has(el);
+    return !!el.__anystreamClickBound;
+  }
+
+  // Catch click listeners added after this script loads, which covers cards
+  // created by SPA route changes and infinite-scroll pages. Existing listeners
+  // are handled by the property/React/class/image checks below.
+  function trackClickListeners() {
+    var proto = window.EventTarget && window.EventTarget.prototype;
+    if (!proto || proto.__anystreamClickTracked) return;
+    var original = proto.addEventListener;
+    if (typeof original !== "function") return;
+    proto.addEventListener = function (type, listener, options) {
+      try {
+        if (this && this.nodeType === 1 &&
+            /^(click|dblclick|mousedown|mouseup|pointerdown|pointerup|touchstart|touchend)$/i.test(String(type))) {
+          markClickTarget(this);
+          invalidateFocusables();
+        }
+      } catch (err) {}
+      return original.apply(this, arguments);
+    };
+    proto.__anystreamClickTracked = true;
+  }
+
+  function hasHandlerProperty(el) {
+    if (!el) return false;
+    var names = ["onclick", "onmousedown", "onmouseup", "onpointerdown",
+      "onpointerup", "ontouchend", "ontouchstart"];
+    for (var i = 0; i < names.length; i++) {
+      if (typeof el[names[i]] === "function") return true;
+    }
+    return false;
+  }
+
+  function propsHaveClick(props) {
+    if (!props) return false;
+    var names = ["onClick", "onMouseDown", "onMouseUp", "onPointerDown",
+      "onPointerUp", "onTouchStart", "onTouchEnd"];
+    for (var i = 0; i < names.length; i++) {
+      if (typeof props[names[i]] === "function") return true;
+    }
+    return false;
+  }
+
+  function hasReactClick(el) {
+    if (!el || !el.getAttribute) return false;
+    var keys = [];
+    try { keys = Object.keys(el); } catch (err) { return false; }
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].indexOf("__reactProps$") === 0 ||
+          keys[i].indexOf("__reactEventHandlers$") === 0) {
+        if (propsHaveClick(el[keys[i]])) return true;
+      }
+    }
+    if (propsHaveClick(el.__preactattr_)) return true;
+    var vei = el._vei;
+    if (vei) {
+      for (var event in vei) {
+        if (!/click|mousedown|mouseup|pointerdown|pointerup|touch(start|end)/i.test(event)) continue;
+        var invoker = vei[event];
+        if (invoker && (typeof invoker === "function" ||
+            typeof invoker.value === "function")) return true;
+      }
+    }
+    var vue = el.__vue__;
+    return !!(vue && vue.$listeners && typeof vue.$listeners.click === "function");
+  }
+
+  function hasJQueryClick(el) {
+    var jq = window.jQuery;
+    if (!jq || typeof jq._data !== "function") return false;
+    try {
+      var events = jq._data(el, "events");
+      return !!(events && (events.click || events.mousedown || events.pointerdown));
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function visible(el, allowPointerNone) {
     if (!el || el.disabled || el.getAttribute("aria-disabled") === "true") return false;
     if (el.closest && el.closest("[aria-hidden='true']")) return false;
     var style = window.getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden" ||
-        style.opacity === "0" || style.pointerEvents === "none") return false;
+        style.opacity === "0" || (!allowPointerNone && style.pointerEvents === "none")) return false;
     var r = rectOf(el);
     return r.width > 2 && r.height > 2;
   }
@@ -147,19 +252,125 @@
     try { all = root.querySelectorAll("*"); } catch (err) { all = []; }
     for (var j = 0; j < all.length; j++) {
       if (all[j].shadowRoot) collect(all[j].shadowRoot, out);
+      // Movie sites often use plain div/span/li elements with cursor:pointer
+      // or tab classes instead of real links and buttons.
+      if (isClickableNode(all[j])) out.push(all[j]);
     }
   }
 
+  function invalidateFocusables() {
+    focusCache = null;
+    focusCacheAt = 0;
+  }
+
   function focusables() {
+    var now = Date.now();
+    if (focusCache && now - focusCacheAt < 400) return focusCache;
+
     var out = [];
     collect(document, out);
     var clean = [];
     for (var i = 0; i < out.length; i++) {
       if (out.indexOf(out[i]) !== i) continue;
-      if (visible(out[i])) clean.push(out[i]);
+      if (visible(out[i], isMediaElement(out[i]))) clean.push(out[i]);
     }
+    focusCache = clean;
+    focusCacheAt = now;
     return clean;
   }
+
+  function classText(el) {
+    var cls = typeof el.className === "string" ? el.className :
+      (el.getAttribute ? el.getAttribute("class") || "" : "");
+    return cls + " " + (el.id || "");
+  }
+
+  function tabLike(el) {
+    if (!el || !el.getAttribute) return false;
+    if (el.getAttribute("role") === "tab" || el.hasAttribute("data-tab")) return true;
+    var marker = classText(el);
+    if (/(^|[\s_-])(tab-content|tab-pane|tabpanel)([\s_-]|$)/i.test(marker)) return false;
+    if (/(^|[\s_-])(tab|tabs|tab-item|tabitem|tab-button|tabbutton|tab-link|tablink|nav-tab)([\s_-]|$)/i.test(marker)) return true;
+    if (el.hasAttribute("aria-controls")) return true;
+    var parent = el.parentElement;
+    return !!(parent && parent.getAttribute && parent.getAttribute("role") === "tablist");
+  }
+
+  function hintAction(el) {
+    if (!el || !el.getAttribute || !visible(el)) return false;
+    var marker = classText(el);
+    if (!HINT_RE.test(marker) || CONTAINER_RE.test(marker)) return false;
+    var r = rectOf(el);
+    if (r.width < 5 || r.height < 5) return false;
+    if (r.width > window.innerWidth * 0.95 && r.height > window.innerHeight * 0.55) return false;
+    try {
+      if (el.querySelectorAll(SELECTOR).length) return false;
+      return el.children.length <= 2;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function hasActionAncestor(el) {
+    var p = el.parentElement;
+    var depth = 0;
+    while (p && p !== document.body && p !== document.documentElement && depth < 8) {
+      if (p.matches && (p.matches(SELECTOR) || tabLike(p))) return true;
+      var rect = rectOf(p);
+      var tooBig = rect.width > window.innerWidth * 0.95 && rect.height > window.innerHeight * 0.55;
+      if (!tooBig && (hintAction(p) || hasHandlerProperty(p) || hasReactClick(p) ||
+          hasBoundClick(p) || hasJQueryClick(p))) return true;
+      try {
+        if (!tooBig && window.getComputedStyle(p).cursor === "pointer") return true;
+      } catch (err) {}
+      p = p.parentElement;
+      depth++;
+    }
+    return false;
+  }
+
+  function isClickableNode(el) {
+    if (!el || !el.tagName || !el.matches) return false;
+    if (el.matches(SELECTOR)) return false;
+    var tag = el.tagName.toLowerCase();
+    if (!/^(div|span|li|img|svg|picture|figure|section|article|p|strong|b|i|video|canvas)$/.test(tag)) return false;
+    var media = isMediaElement(el);
+    if (!visible(el, media)) return false;
+    var tab = tabLike(el);
+    var style = null;
+    try { style = window.getComputedStyle(el); } catch (err) {}
+    var pointer = !!style && style.cursor === "pointer";
+    var background = false;
+    if (!media && !pointer && !tab && style && /url\(/i.test(style.backgroundImage || "")) {
+      try {
+        background = !el.querySelector("img, picture, video, canvas, svg") &&
+          el.querySelectorAll(SELECTOR).length === 0;
+      } catch (err) { background = false; }
+    }
+    var custom = false;
+    if (!media && !pointer && !tab && !background) {
+      custom = hintAction(el) || hasHandlerProperty(el) || hasReactClick(el) ||
+        hasBoundClick(el) || hasJQueryClick(el);
+    }
+    if (!tab && !pointer && !media && !background && !custom) return false;
+    var r = rectOf(el);
+    var minimum = media || background ? 12 : 5;
+    if (r.width < minimum || r.height < minimum) return false;
+    if (r.width > window.innerWidth * 0.95 && r.height > window.innerHeight * 0.55) return false;
+    // Poster images often have no pointer cursor: the clicking happens on a
+    // card wrapper or a React listener. A focusable image inside that wrapper
+    // is still a reliable tap target because the click bubbles to the card.
+    if (!tab && hasActionAncestor(el)) return false;
+    return true;
+  }
+
+  function prefersNativeTap(el) {
+    return !!(el && el.matches && (isMediaAction(el) || isClickableNode(el) ||
+      el.matches("[data-href], [data-url], [data-link], [data-action], " +
+        "[data-click], [data-toggle], [data-bs-toggle], [jsaction], [aria-haspopup]")));
+  }
+
+  trackClickListeners();
 
   function restore() {
     if (!saved) return;
@@ -285,10 +496,10 @@
       return true;
     }
     var before = regions();
-    // Poster links are often zero-sized wrappers or have their click handler
-    // on the image. A real tap at the media's visible centre works where a
-    // synthetic anchor click can be ignored.
-    if (!(isMediaAction(el) && nativeTap(el))) activateElement(el);
+    // Poster links, custom cards, icons and tabs often listen on an inner
+    // element. Use a real tap at the visible centre, then fall back to the DOM.
+    if (!(prefersNativeTap(el) && nativeTap(el))) activateElement(el);
+    invalidateFocusables();
     scheduleRegionFocus(before);
     return true;
   }
@@ -573,6 +784,7 @@
   }, true);
 
   function installMode() {
+    invalidateFocusables();
     hideSiteScrollbars();
     if (MODE === "pointer") {
       ensurePointer();
