@@ -42,18 +42,13 @@ console.log('bundled FFmpeg:', existsSync(ffmpeg) ? 'yes' : 'NO (direct play onl
 
 await rm(zipPath, { force: true });
 if (process.platform === 'win32') {
-  // bsdtar ships with Windows 10+ and handles the Electron tree far better than
-  // Compress-Archive, which trips over some bundled file timestamps.
-  try {
-    execFileSync('tar', ['-a', '-c', '-f', zipPath, '-C', dist, path.basename(stage)], { stdio: 'inherit' });
-  } catch (err) {
-    console.log('tar failed, falling back to Compress-Archive');
-    execFileSync(
-      'powershell',
-      ['-NoProfile', '-Command', `Compress-Archive -Path '${stage}' -DestinationPath '${zipPath}' -CompressionLevel Optimal -Force`],
-      { stdio: 'inherit' }
-    );
-  }
+  // .NET's ZipFile writes real deflate entries and does not trip over the odd
+  // timestamps inside the Electron tree, unlike Compress-Archive.
+  const script = [
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `[System.IO.Compression.ZipFile]::CreateFromDirectory('${stage.replace(/'/g, "''")}', '${zipPath.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
+  ].join('; ');
+  execFileSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'inherit' });
 } else {
   execFileSync('zip', ['-r', '-q', zipPath, path.basename(stage)], { cwd: dist, stdio: 'inherit' });
 }

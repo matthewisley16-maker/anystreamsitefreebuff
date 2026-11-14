@@ -67,7 +67,8 @@ android {
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.each { output ->
-            def name = "MattStream-${variant.flavorName}-${variant.buildType.name}.apk"
+            // buildType and flavorName are plain Strings in the variant API.
+            def name = "MattStream-${variant.flavorName}-${variant.buildType}.apk"
             output.outputFileName.set(name)
         }
     }
