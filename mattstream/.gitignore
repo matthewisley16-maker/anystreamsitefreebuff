@@ -1,5 +1,6 @@
 data/
 node_modules/
+dist/
 bin/ffmpeg.exe
 bin/ffmpeg
 *.log

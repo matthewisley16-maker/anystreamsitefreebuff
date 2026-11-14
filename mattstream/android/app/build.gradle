@@ -1,0 +1,74 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Signing: a keystore can be supplied for store-ready builds. Without one the
+// debug key is used, which is fine for sideloading onto your own phone or TV.
+def keystorePath = System.getenv('MATTSTREAM_KEYSTORE')
+def keystorePassword = System.getenv('MATTSTREAM_KEYSTORE_PASSWORD')
+def keystoreAlias = System.getenv('MATTSTREAM_KEY_ALIAS') ?: 'mattstream'
+
+android {
+    namespace 'com.mattstream.app'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.1.0'
+    }
+
+    flavorDimensions 'device'
+
+    productFlavors {
+        phone {
+            dimension 'device'
+            applicationId 'com.mattstream.app'
+            resValue 'string', 'app_name', 'MattStream'
+        }
+        tv {
+            dimension 'device'
+            applicationId 'com.mattstream.app.tv'
+            resValue 'string', 'app_name', 'MattStream TV'
+        }
+    }
+
+    signingConfigs {
+        if (keystorePath) {
+            releaseKey {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keystoreAlias
+                keyPassword keystorePassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystorePath ? signingConfigs.releaseKey : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+// Rename the outputs so the APKs are obvious when they land on a release page.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def name = "MattStream-${variant.flavorName}-${variant.buildType.name}.apk"
+            output.outputFileName.set(name)
+        }
+    }
+}
