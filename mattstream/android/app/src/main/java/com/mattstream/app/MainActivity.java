@@ -212,7 +212,7 @@ public class MainActivity extends Activity {
                 root.addView(v, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                setImmersive(true);
+                applyImmersive(true);
             }
 
             @Override
@@ -233,7 +233,7 @@ public class MainActivity extends Activity {
         root.removeView(fullscreenView);
         fullscreenView = null;
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        setImmersive(false);
+        applyImmersive(false);
         if (fullscreenCallback != null) {
             fullscreenCallback.onCustomViewHidden();
             fullscreenCallback = null;
@@ -241,7 +241,7 @@ public class MainActivity extends Activity {
         if (web != null) web.requestFocus();
     }
 
-    private void setImmersive(boolean on) {
+    private void applyImmersive(boolean on) {
         View decor = getWindow().getDecorView();
         if (on) {
             decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
