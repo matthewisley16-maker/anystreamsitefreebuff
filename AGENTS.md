@@ -1,26 +1,23 @@
-# MattStream - working agreement
+# AnyStreamSite - working agreement
 
-MattStream lives in `mattstream/`. It is its own app and must stay independent of the
-streaming-sites browser at the repository root: never edit root app files to make MattStream work,
-and never point MattStream at root code.
+AnyStreamSite lives at the repository root: `index.html`, `electron/`, `android/`, and `scripts/`.
 
-## Keep GitHub up to date, every time
+MattStream is a separate application in its own repository:
+https://github.com/matthewisley16-maker/MattStream
 
-Any change inside `mattstream/` (server, web UI, Electron shell, Android app, docs, CI) is only
-finished once it is on GitHub. At the end of the turn:
+Do not build, release, or add production workflows for MattStream in this repository. A
+`mattstream/` copy may exist locally, but it is not part of AnyStreamSite and must not be used by
+the root app. Keep any MattStream work in the separate MattStream repository.
 
-1. `git add mattstream` (plus `.github/workflows/mattstream-builds.yml` when it changed)
-2. commit with a short, specific message describing the change
-3. `git push origin main`
+## Android releases
 
-Do not leave MattStream work uncommitted. Do not stage unrelated root-level files, `mattstream/data/`,
-`mattstream/node_modules/`, or `mattstream/bin/ffmpeg.exe` (all ignored on purpose).
+- Build from `android/build.sh`; it writes the signed phone and TV APKs to `dist/android/`.
+- Bump `versionCode` and `versionName` in both manifests before a release.
+- Publish release assets to this repository with `anystreamsite` in their names.
+- Keep the in-app updater pointed only at AnyStreamSite assets; it must ignore releases from other
+  projects.
 
-## Building the apps
+## GitHub
 
-- `mattstream/scripts/package-windows.mjs` builds the portable Windows app into
-  `mattstream/dist/MattStream-Windows-x64.zip`.
-- `.github/workflows/mattstream-builds.yml` builds that zip plus `MattStream-phone-release.apk` and
-  `MattStream-tv-release.apk` on every push, and refreshes the `mattstream-latest` release page.
-- The Android app is a client for the desktop server: it asks for the LAN address MattStream shows
-  and runs the shelf in a WebView with D-pad, fullscreen video and hardware Back.
+Root-level AnyStreamSite changes are complete when they are committed and pushed to `origin main`.
+Do not stage unrelated MattStream changes or generated build output.

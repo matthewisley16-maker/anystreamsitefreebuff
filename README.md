@@ -6,21 +6,22 @@ Built for Windows, Android phones and Android TV from the same UI.
 
 ## Download
 
-Grab the latest build from the [releases page](https://github.com/matthewisley16-maker/anystreamsitefreebuff/releases).
+Grab the Android build from the [v1.1.4 release](https://github.com/matthewisley16-maker/anystreamsitefreebuff/releases/tag/v1.1.4).
 
 | Build | File | For |
 | --- | --- | --- |
 | Windows | `anystreamsitev1.1.2-windows-x64-setup.exe` | Windows 10 and 11, 64-bit |
-| Android phone / tablet | `anystreamsitev1.1.3-phone.apk` | Android 6.0 and newer |
-| Android TV | `anystreamsitev1.1.3-android-tv.apk` | Android TV 6.0 and newer |
+| Android phone / tablet | `anystreamsitev1.1.4-phone.apk` | Android 6.0 and newer |
+| Android TV | `anystreamsitev1.1.4-android-tv.apk` | Android TV 6.0 and newer |
 
-The Windows file name carries its version, platform and architecture. The Android APK names carry the app version; this build is versionCode 26, so it installs as an update over the earlier v25 APKs.
+The Windows file name carries its version, platform and architecture. The Android APK names carry the app version; this build is versionCode 27, so it installs as an update over the earlier v25 and v26 APKs.
 
 ## Features
 
 - **Square poster tiles** — each site's icon artwork fills the whole tile, with the site name laid over the bottom of it
 - **Any site by URL** — add Netflix, Hulu, YouTube, Twitch, iPlayer, a self-hosted server, anything
 - **Real in-app viewer** — sites open in a proper browser view, not a restricted iframe, with back, forward, reload and exit controls
+- **Self-updating Android builds** — the phone and TV APKs check the AnyStreamSite releases, ignore unrelated releases, download the matching signed APK, verify its signature, and open Android's installer
 - **One view, real history** — links and pop-ups inside a site stay in that same view instead of opening a new window, so **Back** returns through the pages you just visited
 - **Video downloads on Windows** — while a site is open, the site toolbar lists unencrypted HLS and direct MP4/WebM/FLV streams, lets you pick an available HLS quality (resolution/bitrate), saves them to your Downloads folder, and remuxes HLS into MP4 with the included FFmpeg engine. DRM, encrypted and live streams are not supported
 - **Persistent sign-ins** — cookies are kept in an app profile, so you stay logged in between sessions
@@ -54,7 +55,7 @@ Only download media you have permission to keep. The downloader uses your curren
 
 ## Android phone / tablet
 
-1. Copy `anystreamsitev1.1.3-phone.apk` to the device, or download it directly in the browser.
+1. Copy `anystreamsitev1.1.4-phone.apk` to the device, or download it directly in the browser.
 2. Open the file and allow installs from unknown sources when Android asks.
 3. The APK is self-signed, so Play Protect may warn about an unknown developer. That is expected for a sideloaded build. If Android blocks the install, tap **More details**, then **Install anyway**; the manifest targets Android 14, so the "made for an older version" warning no longer applies.
 4. Open the app, paste a site URL and add it. Two tiles sit per row on a normal handset.
@@ -62,10 +63,10 @@ Only download media you have permission to keep. The downloader uses your curren
 
 ## Android TV
 
-1. Install `anystreamsitev1.1.3-android-tv.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
+1. Install `anystreamsitev1.1.4-android-tv.apk`. The easiest routes are the **Downloader** app on the TV, or ADB from a computer:
 
    ```bash
-   adb install anystreamsitev1.1.3-android-tv.apk
+   adb install anystreamsitev1.1.4-android-tv.apk
    ```
 
 2. anystreamsite appears in the TV launcher after installing.
@@ -73,9 +74,19 @@ Only download media you have permission to keep. The downloader uses your curren
 4. **Hold OK** on a tile to open its **Edit site / Remove site** menu. The menu also has a Remove confirmation.
 5. Inside an opened site, **D-pad focus** moves through links and buttons, **OK** activates the highlighted control, and the page scrolls when focus has nowhere left to go. Press **Up at the very top of the page** or **Menu** to move into the native Back / Forward / Reload / Exit bar; use Left/Right and OK, then **Down** to return to the page. In **Mouse cursor** mode, the arrows move the dot and **OK** activates the hyperlink or control beneath it. A selected site text field opens the TV keyboard; the D-pad and OK then belong to the keyboard, and **Back** closes it.
 6. **Back** closes the keyboard, an open site dialog or fullscreen video first. It then walks the site history; when there is no more history it returns to the library. At the library home screen, Back sends the app to the TV home screen instead of killing the task.
-7. If you already have an earlier v1.1 TV build, install this APK over it. Its versionCode is 26, so Android accepts it as an update without uninstalling first.
+7. If you already have an earlier v1.1 TV build, install this APK over it. Its versionCode is 27, so Android accepts it as an update without uninstalling first.
 
 The TV build uses a compact 10-foot layout that scales from 720p through 4K, with larger tiles, focus outlines and no heavy blur effects, so it stays readable and smooth on low-power boxes. Links inside a site stay in the same view, and **Back** walks the site's history before returning to the library.
+
+## Android updates
+
+Version 1.1.4 is the first Android build with the built-in updater, so install it once from this release. From then on, anystreamsite checks the latest GitHub release when it starts and shows an **Update available** dialog when a newer signed build exists. The check runs at most once every 12 hours.
+
+You can also open **Settings → App update → Check for updates** at any time. The app downloads the correct phone or TV APK, verifies that it is the same package signed by the same key, and opens Android's package installer. Android still asks you to confirm the install; a sideloaded app cannot silently replace itself. Your library and website sign-ins are preserved across the update.
+
+If Android says installs from anystreamsite are not allowed, choose **Open settings**, enable **Allow from this source**, and return to the app. It reopens the installer automatically.
+
+The built-in services are tested to load in both the phone and TV APK. Playback still depends on the device and the service; DRM-protected services such as Netflix, Disney+, Hulu and Spotify require a WebView/device with Widevine support, and some accounts or regions may require a different sign-in flow.
 
 ## Adding and managing sites
 
@@ -137,11 +148,11 @@ APKs are written to `dist/android/` and signed with the keystore referenced by t
 - **DRM playback** — Netflix and Hulu open and browse normally, but streaming playback needs Widevine, which the Windows build does not ship with. Playback on those services may not work there.
 - **Video download limits** — only unencrypted, on-demand HLS and direct MP4/WebM/FLV files are supported. Encrypted HLS (including AES-128), DRM-protected streams, and live streams are refused rather than bypassed. Some sites serve video in forms the app cannot see, such as cross-origin embedded players or canvas-rendered video.
 - **Unsigned builds** — the Windows installer has no code-signing certificate, and the APKs use a self-signed key. Both trigger warnings on first install.
-- **Android WebView** — some services refuse to play DRM content inside a WebView. The app itself works, but playback support varies by service.
+- **Android WebView** — some services refuse to play DRM content inside a WebView. The app itself works, but playback support varies by service. The Android builds use a normal Chrome browser profile and keep popup sign-ins in the same site view, but they cannot add Widevine to a device that does not provide it.
 - **Local library** — there is no account or sync between devices; each device keeps its own library.
 
 ## Version
 
-Current Android release: **v1.1.3** (versionCode **26**). This remote-control patch removes the old 3-second scroll mode, gives the D-pad direct focus plus page scrolling, and activates links through real taps so site Back history is recorded. The TV keyboard keeps its D-pad input, Back closes dialogs and fullscreen before history, and Up-at-top or Menu reaches the native site toolbar. Focus returns to the control that opened a dialog, the one-second long-press menu applies only to library tiles, and holding OK on an ordinary button still performs a normal click.
+Current Android release: **v1.1.4** (versionCode **27**). This build adds the in-app updater, uses a standard Chrome user agent so streaming sites do not reject the Android WebView, enables mixed-content compatibility, and routes popup sign-in windows back through the main site view. The TV remote controls and the native Back/Forward/Reload/Exit toolbar from v1.1.3 are unchanged.
 
 The Windows build remains **v1.1.2**.
