@@ -145,9 +145,11 @@ feel it.
 
 ## Managing the library
 
-- **Library** - add whole folders or individual video files, remove them again, and see the network address for
-  other devices. A single added file is listed on its own, and still picks up a `poster.jpg` or `.srt` from its own
-  folder.
+- **Library** - add whole folders or individual video files, and see the network address for other devices. Every
+  added folder or file is listed with how many videos it contributes and a **Remove** button: press it once and it
+  arms (the label changes to *Remove?*), press again and the entry leaves MattStream. Nothing is deleted from disk,
+  and the shelf updates straight away. A single added file is listed on its own, and still picks up a `poster.jpg` or
+  `.srt` from its own folder.
 - **Remove a video** - in a film's info panel, or on any episode row, remove it from the shelf. **The file is never
   deleted** - it simply moves to *Removed from your shelf*, where you can restore it at any time.
 - **Rescan** - pick up new files. Removing an entry drops it from the shelf but never touches your files.

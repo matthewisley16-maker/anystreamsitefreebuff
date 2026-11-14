@@ -723,6 +723,9 @@ function render() {
 // Android TV's Back button is the browser back button, so overlays push a
 // history entry and close themselves when it is pressed.
 let closingFromPop = false;
+// Set while we undo our own history entry, so the pop it causes does not close
+// an overlay that has just been reopened (for example after a removal).
+let suppressPop = false;
 
 function pushBackGuard() {
   if (history.state && history.state.mattstream) return;
@@ -736,10 +739,14 @@ function pushBackGuard() {
 function releaseBackGuard() {
   if (closingFromPop) return;
   if (history.state && history.state.mattstream) {
+    suppressPop = true;
+    setTimeout(() => {
+      suppressPop = false;
+    }, 600);
     try {
       history.back();
     } catch (err) {
-      /* ignore */
+      suppressPop = false;
     }
   }
 }
@@ -1174,19 +1181,20 @@ async function openFoldersDialog() {
     info.appendChild(el('strong', null, library.name));
     info.appendChild(el('span', null, library.path));
     row.appendChild(info);
-    const remove = el('button', 'icon-btn', 'Remove');
-    remove.type = 'button';
-    remove.addEventListener('click', async () => {
-      remove.disabled = true;
+    const count = (state.items || []).filter((item) => item.libraryId === library.id).length;
+    row.appendChild(el('span', 'lib-count', count === 1 ? '1 video' : count + ' videos'));
+    const remove = twoStepButton('Remove', 'Remove?', async () => {
       try {
         await api('/api/libraries/' + encodeURIComponent(library.id), { method: 'DELETE' });
         await refreshLibrary();
         closeDialog();
         openFoldersDialog();
-        toast('Removed "' + library.name + '"');
+        toast('Removed "' + library.name + '" from MattStream - the files are still on disk');
       } catch (err) {
         toast(err.message, true);
         remove.disabled = false;
+        remove.textContent = 'Remove';
+        remove.classList.remove('is-armed');
       }
     });
     row.appendChild(remove);
@@ -1934,6 +1942,10 @@ async function boot() {
 
   // The TV Back button also arrives as a history pop.
   window.addEventListener('popstate', () => {
+    if (suppressPop) {
+      suppressPop = false;
+      return;
+    }
     closingFromPop = true;
     try {
       if (player.item) closePlayer();
