@@ -57,9 +57,10 @@ jobs:
       - name: Collect APKs
         run: |
           mkdir -p out
-          find mattstream/android/app/build -name '*.apk' -exec cp -v {} out/ \; || true
+          find . -path ./.git -prune -o -name '*.apk' -print 2>/dev/null | tee found.txt
+          find . -path ./.git -prune -o -name '*.apk' -exec cp {} out/ \; 2>/dev/null || true
           count=$(ls -1 out/*.apk 2>/dev/null | wc -l)
-          echo "::notice title=Collected APKs::$count files: $(ls -1 out 2>/dev/null | tr '\n' ' ')"
+          echo "::notice title=APK search::found=$count apk(s); searched=$(wc -l < found.txt) path(s); build dir exists: $([ -d mattstream/android/app/build ] && echo yes || echo no); sizes: $(du -sh mattstream/android/app/build 2>/dev/null | cut -f1)"
           if [ "$count" -lt 2 ]; then
             echo "::error title=Missing APKs::expected a phone and a tv APK, found $count"
             exit 1

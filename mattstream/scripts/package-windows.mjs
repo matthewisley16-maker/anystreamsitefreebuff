@@ -42,11 +42,18 @@ console.log('bundled FFmpeg:', existsSync(ffmpeg) ? 'yes' : 'NO (direct play onl
 
 await rm(zipPath, { force: true });
 if (process.platform === 'win32') {
-  execFileSync(
-    'powershell',
-    ['-NoProfile', '-Command', `Compress-Archive -Path '${stage}' -DestinationPath '${zipPath}' -CompressionLevel Optimal -Force`],
-    { stdio: 'inherit' }
-  );
+  // bsdtar ships with Windows 10+ and handles the Electron tree far better than
+  // Compress-Archive, which trips over some bundled file timestamps.
+  try {
+    execFileSync('tar', ['-a', '-c', '-f', zipPath, '-C', dist, path.basename(stage)], { stdio: 'inherit' });
+  } catch (err) {
+    console.log('tar failed, falling back to Compress-Archive');
+    execFileSync(
+      'powershell',
+      ['-NoProfile', '-Command', `Compress-Archive -Path '${stage}' -DestinationPath '${zipPath}' -CompressionLevel Optimal -Force`],
+      { stdio: 'inherit' }
+    );
+  }
 } else {
   execFileSync('zip', ['-r', '-q', zipPath, path.basename(stage)], { cwd: dist, stdio: 'inherit' });
 }
