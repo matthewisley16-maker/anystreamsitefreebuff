@@ -46,7 +46,13 @@ jobs:
 
       - name: Build APKs
         working-directory: mattstream/android
-        run: gradle --no-daemon assembleRelease
+        run: gradle --no-daemon --stacktrace assembleRelease 2>&1 | tee build.log
+
+      - name: Report Gradle failure
+        if: failure()
+        working-directory: mattstream/android
+        run: |
+          python3 -c 'import pathlib,re;t=pathlib.Path("build.log").read_text(errors="ignore");k=re.compile(r"error:|What went wrong|Caused by|FAILURE|Could not|FAILED|e: ");L=[l for l in t.splitlines() if k.search(l)][-40:];c="\n".join(L)[:3400].replace("%","%25").replace("\r","").replace("\n","%0A");print("::error title=Gradle failure::"+c)'
 
       - name: Collect APKs
         run: |
